@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>orgzd — maintenance</title>
+<style>
+:root {
+  --bg: #0f0f0f; --surface: #1a1a1a; --border: #2a2a2a;
+  --text: #d4d4d4; --muted: #666; --dim: #444;
+  --accent: #5b9bd5; --red: #e06c75; --green: #98c379; --yellow: #e5c07b;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); }
+.wrap { max-width: 800px; margin: 0 auto; padding: 24px 16px; }
+header h1 { font-size: 20px; color: var(--accent); font-weight: 600; }
+header .date { font-size: 13px; color: var(--muted); margin-top: 2px; }
+nav { margin-top: 12px; margin-bottom: 20px; }
+nav a {
+  color: var(--muted); text-decoration: none; margin-right: 20px;
+  font-size: 13px; padding-bottom: 4px;
+}
+nav a:hover { color: var(--text); }
+nav a.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
+.toolbar {
+  position: sticky; top: 0; background: var(--bg); padding: 10px 0;
+  border-bottom: 1px solid var(--border); z-index: 10;
+  display: flex; align-items: center; gap: 12px;
+}
+#abtn {
+  background: var(--green); color: #111; border: none; border-radius: 4px;
+  padding: 6px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+#abtn:hover { opacity: 0.9; }
+#abtn:disabled { opacity: 0.4; cursor: default; }
+.fgroup { margin-top: 20px; }
+.fheader {
+  font-size: 12px; font-weight: 600; color: var(--muted);
+  padding-bottom: 4px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+}
+.fheader input { cursor: pointer; }
+.ae {
+  display: flex; align-items: baseline; gap: 6px;
+  padding: 3px 8px; font-size: 13px;
+}
+.ae:hover { background: var(--surface); border-radius: 3px; }
+.ae input { flex-shrink: 0; cursor: pointer; }
+.st { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; flex-shrink: 0; }
+.st-DONE { background: #1a2a1a; color: #5a8a5a; }
+.st-CANCELED { background: #2a1a1a; color: #8a5a5a; }
+.atitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag { font-size: 10px; color: var(--muted); background: var(--surface); padding: 1px 5px; border-radius: 2px; }
+.meta { font-size: 11px; color: var(--dim); white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>orgzd</h1>
+    <div class="date">{{.DateStr}}</div>
+  </header>
+  <nav>
+    <a href="/">Agenda</a>
+    <a href="/maintenance" class="active">Maintenance</a>
+  </nav>
+  <div class="toolbar">
+    <button id="abtn">Archive {{.Total}} entries</button>
+    <span class="meta" id="info">{{.Total}} done entries across {{len .Files}} files</span>
+  </div>
+  {{range .Files}}
+  <div class="fgroup">
+    <div class="fheader">
+      <input type="checkbox" class="fall" data-file="{{.Name}}" checked>
+      <span>{{.Name}} ({{len .Entries}})</span>
+    </div>
+    {{range .Entries}}
+    <div class="ae">
+      <input type="checkbox" class="ac" data-file="{{.File}}" data-line="{{.Line}}" checked>
+      <span class="st st-{{.State}}">{{.State}}</span>
+      <span class="atitle">{{.Title}}</span>
+      {{range .Tags}}<span class="tag">{{.}}</span>{{end}}
+      {{if .ClosedStr}}<span class="meta">{{.ClosedStr}}</span>{{end}}
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+</div>
+<script>
+var total = {{.Total}};
+
+function updateCount() {
+  var n = document.querySelectorAll('.ac:checked').length;
+  var btn = document.getElementById('abtn');
+  btn.textContent = 'Archive ' + n + ' entries';
+  btn.disabled = n === 0;
+  document.getElementById('info').textContent = n + ' of ' + total + ' selected';
+}
+
+document.querySelectorAll('.fall').forEach(function(el) {
+  el.addEventListener('change', function() {
+    var file = this.dataset.file;
+    var checked = this.checked;
+    document.querySelectorAll('.ac[data-file="' + file + '"]').forEach(function(cb) {
+      cb.checked = checked;
+    });
+    updateCount();
+  });
+});
+
+document.querySelectorAll('.ac').forEach(function(el) {
+  el.addEventListener('change', function() {
+    var file = this.dataset.file;
+    var all = document.querySelectorAll('.ac[data-file="' + file + '"]');
+    var checked = document.querySelectorAll('.ac[data-file="' + file + '"]:checked');
+    var fbox = document.querySelector('.fall[data-file="' + file + '"]');
+    fbox.checked = all.length === checked.length;
+    fbox.indeterminate = checked.length > 0 && checked.length < all.length;
+    updateCount();
+  });
+});
+
+document.getElementById('abtn').addEventListener('click', function() {
+  var entries = [];
+  document.querySelectorAll('.ac:checked').forEach(function(el) {
+    entries.push({file: el.dataset.file, line: parseInt(el.dataset.line)});
+  });
+  if (entries.length === 0) return;
+  if (!confirm('Archive ' + entries.length + ' entries to archive.org?')) return;
+  this.disabled = true;
+  this.textContent = 'Archiving...';
+  fetch('/api/archive', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({entries: entries})
+  }).then(function(r) {
+    if (r.ok) location.reload();
+    else r.text().then(function(t) { alert(t); location.reload(); });
+  });
+});
+</script>
+</body>
+</html>

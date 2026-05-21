@@ -48,6 +48,13 @@ details.e summary::-webkit-details-marker { display: none; }
   display: inline-block; vertical-align: baseline;
 }
 .cb:hover { border-color: var(--green); }
+nav { margin-top: 12px; margin-bottom: 20px; }
+nav a {
+  color: var(--muted); text-decoration: none; margin-right: 20px;
+  font-size: 13px; padding-bottom: 4px;
+}
+nav a:hover { color: var(--text); }
+nav a.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
 .empty { padding: 6px 8px; font-size: 13px; color: #333; }
 .detail {
   padding: 4px 8px 10px 8px; margin: 0 8px 4px;
@@ -67,6 +74,10 @@ details.e summary::-webkit-details-marker { display: none; }
     <h1>orgzd</h1>
     <div class="date">{{.DateStr}}</div>
   </header>
+  <nav>
+    <a href="/" class="active">Agenda</a>
+    <a href="/maintenance">Maintenance</a>
+  </nav>
   {{range .Groups}}
   <div class="group">
     <div class="glabel {{.Type}}">
