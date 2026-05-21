@@ -66,9 +66,10 @@ button.cancel { background: var(--surface); color: var(--muted); }
         </select>
       </label>
       {{else}}
-      <label>File <span class="hint">({{.Draft.File}}:{{.Draft.Line}})</span>
-        <input name="file" value="{{.Draft.File}}" readonly>
+      <label>File
+        <input value="{{.Draft.File}}:{{.Draft.Line}}" readonly>
       </label>
+      <input type="hidden" name="file" value="{{.Draft.File}}">
       <input type="hidden" name="line" value="{{.Draft.Line}}">
       {{end}}
       <label>State
