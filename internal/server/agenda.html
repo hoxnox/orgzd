@@ -36,7 +36,8 @@ details.e summary::-webkit-details-marker { display: none; }
 .st-TODO { background: #1a2e1a; color: var(--green); }
 .st-WAIT { background: #2e2a1a; color: var(--yellow); }
 .title { flex: 1; min-width: 0; }
-.tag { font-size: 10px; color: var(--muted); background: var(--surface); padding: 1px 5px; border-radius: 2px; }
+.tag { font-size: 10px; color: var(--muted); background: var(--surface); padding: 1px 5px; border-radius: 2px; text-decoration: none; }
+.tag:hover { color: var(--accent); }
 .meta { font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .file { font-size: 11px; color: var(--dim); }
 .overdue-e .meta { color: var(--red); }
@@ -91,7 +92,7 @@ nav a.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
         <button class="cb" data-file="{{.File}}" data-line="{{.Line}}">&nbsp;</button>
         {{if .State}}<span class="st st-{{.State}}">{{.State}}</span>{{end}}
         <span class="title">{{.Title}}{{if .IsDeadline}}<span class="dl">DL</span>{{end}}</span>
-        {{range .Tags}}<span class="tag">{{.}}</span>{{end}}
+        {{range .Tags}}<a class="tag" href="/tag/{{.}}" onclick="event.stopPropagation()">{{.}}</a>{{end}}
         {{if ne $type "today"}}<span class="meta">{{.DateLabel}}</span>{{end}}
         {{with .TimeLabel}}<span class="meta">{{.}}</span>{{end}}
         <span class="file">{{.File}}</span>

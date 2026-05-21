@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,12 +15,13 @@ import (
 	"orgzd/internal/org"
 )
 
-//go:embed agenda.html maintenance.html
+//go:embed agenda.html maintenance.html tag.html
 var tmplFS embed.FS
 
 var (
 	agendaTmpl = template.Must(template.ParseFS(tmplFS, "agenda.html"))
 	maintTmpl  = template.Must(template.ParseFS(tmplFS, "maintenance.html"))
+	tagTmpl    = template.Must(template.ParseFS(tmplFS, "tag.html"))
 )
 
 func Start(addr, dir string) error {
@@ -122,6 +124,68 @@ func Start(addr, dir string) error {
 			return
 		}
 		w.WriteHeader(200)
+	})
+
+	type tagEntry struct {
+		*org.Entry
+		DateStr string
+	}
+
+	http.HandleFunc("GET /tag/{name}", func(w http.ResponseWriter, r *http.Request) {
+		tag := r.PathValue("name")
+		days := 30
+		if d := r.URL.Query().Get("days"); d != "" {
+			if n, err := strconv.Atoi(d); err == nil && n > 0 {
+				days = n
+			}
+		}
+		entries, err := org.ParseDir(dir)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		since := time.Now().AddDate(0, 0, -days)
+		var matched []tagEntry
+		for _, e := range entries {
+			hasTag := false
+			for _, t := range e.Tags {
+				if t == tag {
+					hasTag = true
+					break
+				}
+			}
+			if !hasTag {
+				continue
+			}
+			rd := e.RelevantDate()
+			if rd == nil || rd.Time.Before(since) {
+				continue
+			}
+			ds := rd.Time.Format("02 Jan 2006")
+			if rd.HasTime {
+				ds += " " + rd.Time.Format("15:04")
+			}
+			matched = append(matched, tagEntry{Entry: e, DateStr: ds})
+		}
+		sort.Slice(matched, func(i, j int) bool {
+			return matched[j].RelevantDate().Time.Before(matched[i].RelevantDate().Time)
+		})
+
+		data := struct {
+			DateStr string
+			Tag     string
+			Days    int
+			Entries []tagEntry
+		}{
+			DateStr: time.Now().Format("Monday, 02 January 2006"),
+			Tag:     tag,
+			Days:    days,
+			Entries: matched,
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := tagTmpl.Execute(w, data); err != nil {
+			log.Printf("template: %v", err)
+		}
 	})
 
 	return http.ListenAndServe(addr, nil)

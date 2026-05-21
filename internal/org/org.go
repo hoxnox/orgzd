@@ -24,9 +24,20 @@ type Entry struct {
 	Tags      []string
 	Scheduled *Timestamp
 	Deadline  *Timestamp
+	Closed    *Timestamp
 	Body      string
 	File      string
 	Line      int
+}
+
+func (e *Entry) RelevantDate() *Timestamp {
+	if e.Closed != nil {
+		return e.Closed
+	}
+	if e.Scheduled != nil {
+		return e.Scheduled
+	}
+	return e.Deadline
 }
 
 func (ts *Timestamp) String() string {
@@ -45,11 +56,12 @@ func (ts *Timestamp) String() string {
 }
 
 var (
-	todoDefRe    = regexp.MustCompile(`^#\+TODO:\s*(.+)$`)
-	headlineRe   = regexp.MustCompile(`^(\*+)\s+(.+)$`)
-	timestampRe  = regexp.MustCompile(`<(\d{4}-\d{2}-\d{2})(?:\s+[A-Za-z]{2,3})?(?:\s+(\d{2}:\d{2}))?(?:\s+([.+]+\d+[hdwmy]))?>`)
-	tagsRe       = regexp.MustCompile(`\s+:([\w@:]+):\s*$`)
-	drawerOpenRe = regexp.MustCompile(`^\s*:[A-Z][A-Z_]*:\s*$`)
+	todoDefRe           = regexp.MustCompile(`^#\+TODO:\s*(.+)$`)
+	headlineRe          = regexp.MustCompile(`^(\*+)\s+(.+)$`)
+	timestampRe         = regexp.MustCompile(`<(\d{4}-\d{2}-\d{2})(?:\s+[A-Za-z]{2,3})?(?:\s+(\d{1,2}:\d{2}))?(?:\s+([.+]+\d+[hdwmy]))?>`)
+	inactiveTimestampRe = regexp.MustCompile(`\[(\d{4}-\d{2}-\d{2})(?:\s+[A-Za-z]{2,3})?(?:\s+(\d{1,2}:\d{2}))?\]`)
+	tagsRe              = regexp.MustCompile(`\s+:([\w@:]+):\s*$`)
+	drawerOpenRe        = regexp.MustCompile(`^\s*:[A-Z][A-Z_]*:\s*$`)
 )
 
 func ParseDir(dir string) ([]*Entry, error) {
@@ -187,6 +199,9 @@ func ParseFile(path string) ([]*Entry, error) {
 				}
 			}
 			if strings.Contains(line, "CLOSED:") {
+				if ts := parseInactiveTimestamp(line[strings.Index(line, "CLOSED:"):]); ts != nil {
+					current.Closed = ts
+				}
 				found = true
 			}
 			if !found {
@@ -207,19 +222,35 @@ func parseTimestamp(s string) *Timestamp {
 	if m == nil {
 		return nil
 	}
-	var t time.Time
-	var hasTime bool
-	var err error
-	if m[2] != "" {
-		t, err = time.ParseInLocation("2006-01-02 15:04", m[1]+" "+m[2], time.Local)
-		hasTime = true
-	} else {
-		t, err = time.ParseInLocation("2006-01-02", m[1], time.Local)
-	}
+	t, hasTime, err := parseDateTime(m[1], m[2])
 	if err != nil {
 		return nil
 	}
 	return &Timestamp{Time: t, HasTime: hasTime, Repeater: m[3]}
+}
+
+func parseInactiveTimestamp(s string) *Timestamp {
+	m := inactiveTimestampRe.FindStringSubmatch(s)
+	if m == nil {
+		return nil
+	}
+	t, hasTime, err := parseDateTime(m[1], m[2])
+	if err != nil {
+		return nil
+	}
+	return &Timestamp{Time: t, HasTime: hasTime}
+}
+
+func parseDateTime(date, hms string) (time.Time, bool, error) {
+	if hms == "" {
+		t, err := time.ParseInLocation("2006-01-02", date, time.Local)
+		return t, false, err
+	}
+	if strings.Index(hms, ":") == 1 {
+		hms = "0" + hms
+	}
+	t, err := time.ParseInLocation("2006-01-02 15:04", date+" "+hms, time.Local)
+	return t, true, err
 }
 
 func parseTodoDef(def string) (active, done []string) {

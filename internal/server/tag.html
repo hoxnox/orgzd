@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>orgzd — :{{.Tag}}:</title>
+<style>
+:root {
+  --bg: #0f0f0f; --surface: #1a1a1a; --border: #2a2a2a;
+  --text: #d4d4d4; --muted: #666; --dim: #444;
+  --accent: #5b9bd5; --red: #e06c75; --green: #98c379; --yellow: #e5c07b;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); }
+.wrap { max-width: 800px; margin: 0 auto; padding: 24px 16px; }
+header h1 { font-size: 20px; color: var(--accent); font-weight: 600; }
+header .date { font-size: 13px; color: var(--muted); margin-top: 2px; }
+nav { margin-top: 12px; margin-bottom: 20px; }
+nav a { color: var(--muted); text-decoration: none; margin-right: 20px; font-size: 13px; padding-bottom: 4px; }
+nav a:hover { color: var(--text); }
+.tag-h {
+  font-size: 14px; color: var(--accent); font-weight: 600;
+  padding-bottom: 6px; border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: baseline;
+}
+.tag-h .meta { color: var(--muted); font-size: 12px; font-weight: 400; }
+.range { font-size: 12px; color: var(--muted); margin-top: 8px; margin-bottom: 8px; }
+.range a { color: var(--muted); text-decoration: none; margin-right: 10px; }
+.range a:hover, .range a.active { color: var(--accent); }
+details.e { border-radius: 4px; }
+details.e:hover { background: var(--surface); }
+details.e summary {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 6px 8px; font-size: 14px; cursor: pointer; list-style: none;
+}
+details.e summary::-webkit-details-marker { display: none; }
+.st { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; flex-shrink: 0; }
+.st-TODO { background: #1a2e1a; color: var(--green); }
+.st-WAIT { background: #2e2a1a; color: var(--yellow); }
+.st-DONE { background: #1a2a1a; color: #5a8a5a; }
+.st-CANCELED { background: #2a1a1a; color: #8a5a5a; }
+.title { flex: 1; min-width: 0; }
+.tag {
+  font-size: 10px; color: var(--muted); background: var(--surface);
+  padding: 1px 5px; border-radius: 2px; text-decoration: none;
+}
+.tag:hover { color: var(--accent); }
+.tag.this { color: var(--accent); }
+.meta { font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.file { font-size: 11px; color: var(--dim); }
+.has-body { color: var(--dim); font-size: 10px; flex-shrink: 0; }
+.empty { padding: 8px; font-size: 13px; color: var(--muted); font-style: italic; }
+.detail {
+  padding: 4px 8px 10px 8px; margin: 0 8px 4px;
+  border-left: 2px solid var(--border); font-size: 12px; color: var(--muted);
+}
+.detail .dline { margin-bottom: 2px; }
+.detail .dk { display: inline-block; width: 14px; color: var(--dim); font-weight: 600; }
+.detail pre.body {
+  margin-top: 8px; white-space: pre-wrap; word-break: break-word;
+  color: var(--text); font-family: inherit; font-size: 13px; line-height: 1.5;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>orgzd</h1>
+    <div class="date">{{.DateStr}}</div>
+  </header>
+  <nav>
+    <a href="/">Agenda</a>
+    <a href="/maintenance">Maintenance</a>
+  </nav>
+  <div class="tag-h">
+    <span>:{{.Tag}}:</span>
+    <span class="meta">{{len .Entries}} entries</span>
+  </div>
+  <div class="range">
+    range:
+    <a href="/tag/{{.Tag}}?days=7"{{if eq .Days 7}} class="active"{{end}}>7d</a>
+    <a href="/tag/{{.Tag}}?days=30"{{if eq .Days 30}} class="active"{{end}}>30d</a>
+    <a href="/tag/{{.Tag}}?days=90"{{if eq .Days 90}} class="active"{{end}}>90d</a>
+    <a href="/tag/{{.Tag}}?days=365"{{if eq .Days 365}} class="active"{{end}}>1y</a>
+    <a href="/tag/{{.Tag}}?days=99999"{{if eq .Days 99999}} class="active"{{end}}>all</a>
+  </div>
+  {{if .Entries}}
+  {{range .Entries}}
+  <details class="e">
+    <summary>
+      {{if .State}}<span class="st st-{{.State}}">{{.State}}</span>{{end}}
+      <span class="title">{{.Title}}</span>
+      {{range .Tags}}<a class="tag{{if eq . $.Tag}} this{{end}}" href="/tag/{{.}}" onclick="event.stopPropagation()">{{.}}</a>{{end}}
+      <span class="meta">{{.DateStr}}</span>
+      <span class="file">{{.File}}</span>
+      {{if .Body}}<span class="has-body">&middot;&middot;&middot;</span>{{end}}
+    </summary>
+    <div class="detail">
+      {{with .Closed}}<div class="dline"><span class="dk">C</span> {{.}}</div>{{end}}
+      {{with .Scheduled}}<div class="dline"><span class="dk">S</span> {{.}}</div>{{end}}
+      {{with .Deadline}}<div class="dline"><span class="dk">D</span> {{.}}</div>{{end}}
+      <div class="dline"><span class="dk">@</span> {{.File}}:{{.Line}}</div>
+      {{if .Body}}<pre class="body">{{.Body}}</pre>{{end}}
+    </div>
+  </details>
+  {{end}}
+  {{else}}
+  <div class="empty">no entries with :{{.Tag}}: in this range</div>
+  {{end}}
+</div>
+</body>
+</html>

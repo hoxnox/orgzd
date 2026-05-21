@@ -50,7 +50,8 @@ nav a.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
 .st-DONE { background: #1a2a1a; color: #5a8a5a; }
 .st-CANCELED { background: #2a1a1a; color: #8a5a5a; }
 .atitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tag { font-size: 10px; color: var(--muted); background: var(--surface); padding: 1px 5px; border-radius: 2px; }
+.tag { font-size: 10px; color: var(--muted); background: var(--surface); padding: 1px 5px; border-radius: 2px; text-decoration: none; }
+.tag:hover { color: var(--accent); }
 .meta { font-size: 11px; color: var(--dim); white-space: nowrap; }
 </style>
 </head>
@@ -79,7 +80,7 @@ nav a.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
       <input type="checkbox" class="ac" data-file="{{.File}}" data-line="{{.Line}}" checked>
       <span class="st st-{{.State}}">{{.State}}</span>
       <span class="atitle">{{.Title}}</span>
-      {{range .Tags}}<span class="tag">{{.}}</span>{{end}}
+      {{range .Tags}}<a class="tag" href="/tag/{{.}}">{{.}}</a>{{end}}
       {{if .ClosedStr}}<span class="meta">{{.ClosedStr}}</span>{{end}}
     </div>
     {{end}}
