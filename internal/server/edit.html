@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>orgzd — {{if eq .Mode "new"}}new{{else}}edit{{end}}</title>
+<style>
+:root {
+  --bg: #0f0f0f; --surface: #1a1a1a; --border: #2a2a2a;
+  --text: #d4d4d4; --muted: #666; --dim: #444;
+  --accent: #5b9bd5; --red: #e06c75; --green: #98c379; --yellow: #e5c07b;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); }
+.wrap { max-width: 800px; margin: 0 auto; padding: 24px 16px; }
+header h1 { font-size: 20px; color: var(--accent); font-weight: 600; }
+header .date { font-size: 13px; color: var(--muted); margin-top: 2px; }
+nav { margin-top: 12px; margin-bottom: 20px; }
+nav a { color: var(--muted); text-decoration: none; margin-right: 20px; font-size: 13px; padding-bottom: 4px; }
+nav a:hover { color: var(--text); }
+nav a.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
+form { display: flex; flex-direction: column; gap: 14px; max-width: 700px; }
+form label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+form input, form select, form textarea {
+  background: var(--surface); color: var(--text); border: 1px solid var(--border);
+  padding: 7px 9px; border-radius: 3px; font-family: inherit; font-size: 14px;
+}
+form input:focus, form select:focus, form textarea:focus {
+  border-color: var(--accent); outline: none;
+}
+form input[readonly] { color: var(--muted); cursor: default; }
+form textarea {
+  min-height: 240px; font-family: ui-monospace, monospace;
+  font-size: 13px; line-height: 1.5; resize: vertical;
+}
+.row { display: flex; gap: 12px; }
+.row label { flex: 1; }
+.actions { display: flex; gap: 8px; align-items: center; }
+button {
+  background: var(--green); color: #111; border: none; border-radius: 4px;
+  padding: 8px 22px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+button:hover { opacity: 0.9; }
+button.cancel { background: var(--surface); color: var(--muted); }
+.hint { color: var(--dim); font-size: 11px; text-transform: none; font-weight: 400; letter-spacing: 0; }
+.err { color: var(--red); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>orgzd</h1>
+    <div class="date">{{.DateStr}}</div>
+  </header>
+  <nav>
+    <a href="/">Agenda</a>
+    <a href="/maintenance">Maintenance</a>
+    <a href="/new"{{if eq .Mode "new"}} class="active"{{end}}>+ New</a>
+  </nav>
+  <form id="ef">
+    <div class="row">
+      {{if eq .Mode "new"}}
+      <label>File
+        <select name="file">
+          {{range .Files}}<option{{if eq . $.Draft.File}} selected{{end}}>{{.}}</option>{{end}}
+        </select>
+      </label>
+      {{else}}
+      <label>File <span class="hint">({{.Draft.File}}:{{.Draft.Line}})</span>
+        <input name="file" value="{{.Draft.File}}" readonly>
+      </label>
+      <input type="hidden" name="line" value="{{.Draft.Line}}">
+      {{end}}
+      <label>State
+        <select name="state">
+          <option value=""{{if eq .Draft.State ""}} selected{{end}}>(none)</option>
+          {{$cur := .Draft.State}}
+          {{range .States}}<option{{if eq . $cur}} selected{{end}}>{{.}}</option>{{end}}
+        </select>
+      </label>
+    </div>
+    <label>Title
+      <input name="title" value="{{.Draft.Title}}" required autofocus>
+    </label>
+    <label>Tags <span class="hint">space-separated</span>
+      <input name="tags" value="{{.TagsStr}}" placeholder="vk school">
+    </label>
+    <div class="row">
+      <label>Scheduled <span class="hint">YYYY-MM-DD [HH:MM] [+1w]</span>
+        <input name="scheduled" value="{{.Draft.Scheduled}}" placeholder="2026-06-15 14:00 +1w">
+      </label>
+      <label>Deadline <span class="hint">YYYY-MM-DD [HH:MM]</span>
+        <input name="deadline" value="{{.Draft.Deadline}}" placeholder="">
+      </label>
+    </div>
+    <label>Body
+      <textarea name="body">{{.Draft.Body}}</textarea>
+    </label>
+    <div class="actions">
+      <button type="submit">{{if eq .Mode "new"}}Create{{else}}Save{{end}}</button>
+      <a href="/" class="cancel"><button type="button" class="cancel">Cancel</button></a>
+      <span class="err" id="err"></span>
+    </div>
+  </form>
+</div>
+<script>
+var mode = {{.Mode}};
+document.getElementById('ef').addEventListener('submit', function(e) {
+  e.preventDefault();
+  var fd = new FormData(this);
+  var data = {};
+  fd.forEach(function(v, k) { data[k] = v; });
+  if (data.line) data.line = parseInt(data.line);
+  var url = mode === 'new' ? '/api/new' : '/api/edit';
+  var err = document.getElementById('err');
+  err.textContent = '';
+  fetch(url, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(data)
+  }).then(function(r) {
+    if (r.ok) window.location = '/';
+    else r.text().then(function(t) { err.textContent = t.trim(); });
+  });
+});
+</script>
+</body>
+</html>

@@ -15,14 +15,36 @@ import (
 	"orgzd/internal/org"
 )
 
-//go:embed agenda.html maintenance.html tag.html
+//go:embed agenda.html maintenance.html tag.html edit.html
 var tmplFS embed.FS
 
 var (
 	agendaTmpl = template.Must(template.ParseFS(tmplFS, "agenda.html"))
 	maintTmpl  = template.Must(template.ParseFS(tmplFS, "maintenance.html"))
 	tagTmpl    = template.Must(template.ParseFS(tmplFS, "tag.html"))
+	editTmpl   = template.Must(template.ParseFS(tmplFS, "edit.html"))
 )
+
+func parseTagsInput(s string) []string {
+	var tags []string
+	for _, t := range strings.FieldsFunc(s, func(r rune) bool {
+		return r == ' ' || r == ',' || r == ':'
+	}) {
+		if t != "" {
+			tags = append(tags, t)
+		}
+	}
+	return tags
+}
+
+type editFormData struct {
+	DateStr string
+	Mode    string
+	Files   []string
+	States  []string
+	Draft   *org.EntryDraft
+	TagsStr string
+}
 
 func Start(addr, dir string) error {
 	http.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
@@ -186,6 +208,112 @@ func Start(addr, dir string) error {
 		if err := tagTmpl.Execute(w, data); err != nil {
 			log.Printf("template: %v", err)
 		}
+	})
+
+	http.HandleFunc("GET /new", func(w http.ResponseWriter, r *http.Request) {
+		files, _ := org.ListFiles(dir)
+		file := r.URL.Query().Get("file")
+		if file == "" {
+			for _, f := range files {
+				if f == "inbox.org" {
+					file = f
+					break
+				}
+			}
+			if file == "" && len(files) > 0 {
+				file = files[0]
+			}
+		}
+		data := editFormData{
+			DateStr: time.Now().Format("Monday, 02 January 2006"),
+			Mode:    "new",
+			Files:   files,
+			States:  []string{"TODO", "WAIT", "DONE", "CANCELED"},
+			Draft:   &org.EntryDraft{File: file},
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := editTmpl.Execute(w, data); err != nil {
+			log.Printf("template: %v", err)
+		}
+	})
+
+	http.HandleFunc("GET /edit/{file}/{line}", func(w http.ResponseWriter, r *http.Request) {
+		file := r.PathValue("file")
+		line, err := strconv.Atoi(r.PathValue("line"))
+		if err != nil {
+			http.Error(w, "invalid line", 400)
+			return
+		}
+		draft, err := org.LoadEntry(dir, file, line)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		files, _ := org.ListFiles(dir)
+		data := editFormData{
+			DateStr: time.Now().Format("Monday, 02 January 2006"),
+			Mode:    "edit",
+			Files:   files,
+			States:  []string{"TODO", "WAIT", "DONE", "CANCELED"},
+			Draft:   draft,
+			TagsStr: strings.Join(draft.Tags, " "),
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := editTmpl.Execute(w, data); err != nil {
+			log.Printf("template: %v", err)
+		}
+	})
+
+	decodeDraft := func(r *http.Request) (*org.EntryDraft, error) {
+		var req struct {
+			File      string `json:"file"`
+			Line      int    `json:"line"`
+			State     string `json:"state"`
+			Title     string `json:"title"`
+			Tags      string `json:"tags"`
+			Scheduled string `json:"scheduled"`
+			Deadline  string `json:"deadline"`
+			Body      string `json:"body"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			return nil, err
+		}
+		return &org.EntryDraft{
+			File:      req.File,
+			Line:      req.Line,
+			State:     req.State,
+			Title:     strings.TrimSpace(req.Title),
+			Tags:      parseTagsInput(req.Tags),
+			Scheduled: strings.TrimSpace(req.Scheduled),
+			Deadline:  strings.TrimSpace(req.Deadline),
+			Body:      req.Body,
+		}, nil
+	}
+
+	http.HandleFunc("POST /api/new", func(w http.ResponseWriter, r *http.Request) {
+		d, err := decodeDraft(r)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		if err := org.CreateEntry(dir, d); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.WriteHeader(200)
+	})
+
+	http.HandleFunc("POST /api/edit", func(w http.ResponseWriter, r *http.Request) {
+		d, err := decodeDraft(r)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		if err := org.UpdateEntry(dir, d); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.WriteHeader(200)
 	})
 
 	return http.ListenAndServe(addr, nil)

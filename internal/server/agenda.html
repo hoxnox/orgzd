@@ -78,6 +78,7 @@ nav a.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
   <nav>
     <a href="/" class="active">Agenda</a>
     <a href="/maintenance">Maintenance</a>
+    <a href="/new">+ New</a>
   </nav>
   {{range .Groups}}
   <div class="group">
@@ -101,7 +102,7 @@ nav a.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
       <div class="detail">
         {{with .Scheduled}}<div class="dline"><span class="dk">S</span> {{.}}</div>{{end}}
         {{with .Deadline}}<div class="dline"><span class="dk">D</span> {{.}}</div>{{end}}
-        <div class="dline"><span class="dk">@</span> {{.File}}:{{.Line}}</div>
+        <div class="dline"><span class="dk">@</span> {{.File}}:{{.Line}} <a href="/edit/{{.File}}/{{.Line}}" style="color:var(--accent);text-decoration:none;margin-left:8px">edit</a></div>
         {{if .Body}}<pre class="body">{{.Body}}</pre>{{end}}
       </div>
     </details>
