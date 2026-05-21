@@ -24,11 +24,14 @@ header .date { font-size: 13px; color: var(--muted); margin-top: 2px; }
 }
 .glabel.overdue { color: var(--red); border-color: var(--red); }
 .glabel.today { color: var(--accent); border-color: var(--accent); }
-.e {
+details.e { border-radius: 4px; }
+details.e:hover { background: var(--surface); }
+details.e summary {
   display: flex; align-items: baseline; gap: 8px;
-  padding: 6px 8px; border-radius: 4px; font-size: 14px;
+  padding: 6px 8px; font-size: 14px; cursor: pointer;
+  list-style: none;
 }
-.e:hover { background: var(--surface); }
+details.e summary::-webkit-details-marker { display: none; }
 .st { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; flex-shrink: 0; }
 .st-TODO { background: #1a2e1a; color: var(--green); }
 .st-WAIT { background: #2e2a1a; color: var(--yellow); }
@@ -38,7 +41,18 @@ header .date { font-size: 13px; color: var(--muted); margin-top: 2px; }
 .file { font-size: 11px; color: var(--dim); }
 .overdue-e .meta { color: var(--red); }
 .dl { font-size: 9px; color: var(--red); margin-left: 2px; vertical-align: super; }
+.has-body { color: var(--dim); font-size: 10px; flex-shrink: 0; }
 .empty { padding: 6px 8px; font-size: 13px; color: #333; }
+.detail {
+  padding: 4px 8px 10px 8px; margin: 0 8px 4px;
+  border-left: 2px solid var(--border); font-size: 12px; color: var(--muted);
+}
+.detail .dline { margin-bottom: 2px; }
+.detail .dk { display: inline-block; width: 14px; color: var(--dim); font-weight: 600; }
+.detail pre.body {
+  margin-top: 8px; white-space: pre-wrap; word-break: break-word;
+  color: var(--text); font-family: inherit; font-size: 13px; line-height: 1.5;
+}
 </style>
 </head>
 <body>
@@ -55,14 +69,23 @@ header .date { font-size: 13px; color: var(--muted); margin-top: 2px; }
     </div>
     {{if .Entries}}{{$type := .Type}}
     {{range .Entries}}
-    <div class="e{{if eq $type "overdue"}} overdue-e{{end}}">
-      {{if .State}}<span class="st st-{{.State}}">{{.State}}</span>{{end}}
-      <span class="title">{{.Title}}{{if .IsDeadline}}<span class="dl">DL</span>{{end}}</span>
-      {{range .Tags}}<span class="tag">{{.}}</span>{{end}}
-      {{if ne $type "today"}}<span class="meta">{{.DateLabel}}</span>{{end}}
-      {{with .TimeLabel}}<span class="meta">{{.}}</span>{{end}}
-      <span class="file">{{.File}}</span>
-    </div>
+    <details class="e{{if eq $type "overdue"}} overdue-e{{end}}">
+      <summary>
+        {{if .State}}<span class="st st-{{.State}}">{{.State}}</span>{{end}}
+        <span class="title">{{.Title}}{{if .IsDeadline}}<span class="dl">DL</span>{{end}}</span>
+        {{range .Tags}}<span class="tag">{{.}}</span>{{end}}
+        {{if ne $type "today"}}<span class="meta">{{.DateLabel}}</span>{{end}}
+        {{with .TimeLabel}}<span class="meta">{{.}}</span>{{end}}
+        <span class="file">{{.File}}</span>
+        {{if .Body}}<span class="has-body">&middot;&middot;&middot;</span>{{end}}
+      </summary>
+      <div class="detail">
+        {{with .Scheduled}}<div class="dline"><span class="dk">S</span> {{.}}</div>{{end}}
+        {{with .Deadline}}<div class="dline"><span class="dk">D</span> {{.}}</div>{{end}}
+        <div class="dline"><span class="dk">@</span> {{.File}}:{{.Line}}</div>
+        {{if .Body}}<pre class="body">{{.Body}}</pre>{{end}}
+      </div>
+    </details>
     {{end}}
     {{else}}
     <div class="empty">&mdash;</div>

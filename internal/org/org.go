@@ -24,16 +24,32 @@ type Entry struct {
 	Tags      []string
 	Scheduled *Timestamp
 	Deadline  *Timestamp
+	Body      string
 	File      string
 	Line      int
 }
 
+func (ts *Timestamp) String() string {
+	if ts == nil {
+		return ""
+	}
+	f := "Mon 02 Jan 2006"
+	if ts.HasTime {
+		f = "Mon 02 Jan 2006 15:04"
+	}
+	s := ts.Time.Format(f)
+	if ts.Repeater != "" {
+		s += " " + ts.Repeater
+	}
+	return s
+}
+
 var (
-	todoDefRe   = regexp.MustCompile(`^#\+TODO:\s*(.+)$`)
-	headlineRe  = regexp.MustCompile(`^(\*+)\s+(.+)$`)
-	timestampRe = regexp.MustCompile(`<(\d{4}-\d{2}-\d{2})(?:\s+[A-Za-z]{2,3})?(?:\s+(\d{2}:\d{2}))?(?:\s+([.+]+\d+[hdwmy]))?>`)
-	tagsRe      = regexp.MustCompile(`\s+:([\w@:]+):\s*$`)
-	propLineRe  = regexp.MustCompile(`^\s*:[\w-]+:`)
+	todoDefRe    = regexp.MustCompile(`^#\+TODO:\s*(.+)$`)
+	headlineRe   = regexp.MustCompile(`^(\*+)\s+(.+)$`)
+	timestampRe  = regexp.MustCompile(`<(\d{4}-\d{2}-\d{2})(?:\s+[A-Za-z]{2,3})?(?:\s+(\d{2}:\d{2}))?(?:\s+([.+]+\d+[hdwmy]))?>`)
+	tagsRe       = regexp.MustCompile(`\s+:([\w@:]+):\s*$`)
+	drawerOpenRe = regexp.MustCompile(`^\s*:[A-Z][A-Z_]*:\s*$`)
 )
 
 func ParseDir(dir string) ([]*Entry, error) {
@@ -68,9 +84,18 @@ func ParseFile(path string) ([]*Entry, error) {
 	scanner := bufio.NewScanner(f)
 	var entries []*Entry
 	var current *Entry
+	var bodyLines []string
 	inPlanning := false
+	inDrawer := false
 	lineNum := 0
 	fname := filepath.Base(path)
+
+	finalize := func() {
+		if current != nil {
+			current.Body = strings.TrimSpace(strings.Join(bodyLines, "\n"))
+			bodyLines = nil
+		}
+	}
 
 	for scanner.Scan() {
 		lineNum++
@@ -84,6 +109,7 @@ func ParseFile(path string) ([]*Entry, error) {
 		}
 
 		if m := headlineRe.FindStringSubmatch(line); m != nil {
+			finalize()
 			level := len(m[1])
 			rest := m[2]
 
@@ -119,43 +145,60 @@ func ParseFile(path string) ([]*Entry, error) {
 				Line:   lineNum,
 			}
 			inPlanning = true
+			inDrawer = false
 			entries = append(entries, current)
 			continue
 		}
 
-		if current == nil || !inPlanning {
+		if current == nil {
 			continue
 		}
 
 		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			inPlanning = false
-			continue
-		}
-		if propLineRe.MatchString(trimmed) {
+
+		if inDrawer {
+			if trimmed == ":END:" {
+				inDrawer = false
+			}
 			continue
 		}
 
-		found := false
-		if strings.Contains(line, "SCHEDULED:") {
-			if ts := parseTimestamp(line[strings.Index(line, "SCHEDULED:"):]); ts != nil {
-				current.Scheduled = ts
+		if drawerOpenRe.MatchString(line) {
+			inDrawer = true
+			continue
+		}
+
+		if inPlanning {
+			if trimmed == "" {
+				inPlanning = false
+				continue
+			}
+			found := false
+			if strings.Contains(line, "SCHEDULED:") {
+				if ts := parseTimestamp(line[strings.Index(line, "SCHEDULED:"):]); ts != nil {
+					current.Scheduled = ts
+					found = true
+				}
+			}
+			if strings.Contains(line, "DEADLINE:") {
+				if ts := parseTimestamp(line[strings.Index(line, "DEADLINE:"):]); ts != nil {
+					current.Deadline = ts
+					found = true
+				}
+			}
+			if strings.Contains(line, "CLOSED:") {
 				found = true
 			}
-		}
-		if strings.Contains(line, "DEADLINE:") {
-			if ts := parseTimestamp(line[strings.Index(line, "DEADLINE:"):]); ts != nil {
-				current.Deadline = ts
-				found = true
+			if !found {
+				inPlanning = false
+				bodyLines = append(bodyLines, line)
 			}
+			continue
 		}
-		if strings.Contains(line, "CLOSED:") {
-			found = true
-		}
-		if !found {
-			inPlanning = false
-		}
+
+		bodyLines = append(bodyLines, line)
 	}
+	finalize()
 	return entries, scanner.Err()
 }
 
