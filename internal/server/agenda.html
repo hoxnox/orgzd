@@ -42,6 +42,12 @@ details.e summary::-webkit-details-marker { display: none; }
 .overdue-e .meta { color: var(--red); }
 .dl { font-size: 9px; color: var(--red); margin-left: 2px; vertical-align: super; }
 .has-body { color: var(--dim); font-size: 10px; flex-shrink: 0; }
+.cb {
+  width: 14px; height: 14px; border: 1.5px solid var(--muted); border-radius: 3px;
+  background: transparent; cursor: pointer; flex-shrink: 0; padding: 0;
+  display: inline-block; vertical-align: baseline;
+}
+.cb:hover { border-color: var(--green); }
 .empty { padding: 6px 8px; font-size: 13px; color: #333; }
 .detail {
   padding: 4px 8px 10px 8px; margin: 0 8px 4px;
@@ -71,6 +77,7 @@ details.e summary::-webkit-details-marker { display: none; }
     {{range .Entries}}
     <details class="e{{if eq $type "overdue"}} overdue-e{{end}}">
       <summary>
+        <button class="cb" data-file="{{.File}}" data-line="{{.Line}}">&nbsp;</button>
         {{if .State}}<span class="st st-{{.State}}">{{.State}}</span>{{end}}
         <span class="title">{{.Title}}{{if .IsDeadline}}<span class="dl">DL</span>{{end}}</span>
         {{range .Tags}}<span class="tag">{{.}}</span>{{end}}
@@ -93,5 +100,28 @@ details.e summary::-webkit-details-marker { display: none; }
   </div>
   {{end}}
 </div>
+<script>
+document.querySelectorAll('.cb').forEach(function(btn){
+  btn.addEventListener('click',function(e){
+    e.stopPropagation();
+    e.preventDefault();
+    btn.disabled=true;
+    btn.style.background='var(--green)';
+    btn.style.borderColor='var(--green)';
+    fetch('/api/done',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({file:btn.dataset.file,line:parseInt(btn.dataset.line)})
+    }).then(function(r){
+      if(r.ok){
+        btn.closest('.e').style.opacity='0.3';
+        setTimeout(function(){location.reload()},400);
+      }else{
+        r.text().then(function(t){alert(t);btn.disabled=false;btn.style.background='';btn.style.borderColor='';});
+      }
+    });
+  });
+});
+</script>
 </body>
 </html>
