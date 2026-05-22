@@ -17,7 +17,7 @@ import (
 func main() {
 	home, _ := os.UserHomeDir()
 	dir := flag.String("dir", filepath.Join(home, "todo"), "directory with org files")
-	port := flag.Int("port", 8042, "HTTP server port")
+	listen := flag.String("listen", ":8042", "HTTP listen address (host:port; :PORT for all interfaces)")
 	cli := flag.Bool("cli", false, "print agenda to stdout and exit")
 	flag.Parse()
 
@@ -26,9 +26,8 @@ func main() {
 		return
 	}
 
-	addr := fmt.Sprintf(":%d", *port)
-	log.Printf("orgzd http://localhost%s dir=%s", addr, *dir)
-	if err := server.Start(addr, *dir); err != nil {
+	log.Printf("orgzd listen=%s dir=%s", *listen, *dir)
+	if err := server.Start(*listen, *dir); err != nil {
 		log.Fatal(err)
 	}
 }
