@@ -44,6 +44,23 @@ button:hover { opacity: 0.9; }
 button.cancel { background: var(--surface); color: var(--muted); }
 .hint { color: var(--dim); font-size: 11px; text-transform: none; font-weight: 400; letter-spacing: 0; }
 .err { color: var(--red); font-size: 12px; }
+/* ── date picker ── */
+.dp-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:1000; }
+.dp-popup { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:14px; width:260px; box-shadow:0 8px 32px rgba(0,0,0,.5); }
+.dp-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.dp-head span { font-size:14px; font-weight:600; }
+.dp-nav { background:none; color:var(--text); border:none; cursor:pointer; font-size:15px; padding:2px 8px; border-radius:3px; }
+.dp-nav:hover { background:var(--border); }
+.dp-days { width:100%; }
+.dp-days th { font-size:10px; color:var(--muted); font-weight:400; padding:2px 0; text-align:center; width:36px; }
+.dp-days td { font-size:13px; text-align:center; padding:4px 0; cursor:pointer; border-radius:3px; }
+.dp-days td:hover { background:var(--border); }
+.dp-days td.dp-today { color:var(--yellow); font-weight:600; }
+.dp-days td.dp-sel { background:var(--accent); color:#111; font-weight:600; }
+.dp-foot { display:flex; align-items:center; justify-content:flex-end; gap:6px; margin-top:8px; }
+.dp-info { flex:1; font-size:11px; color:var(--dim); }
+.dp-today, .dp-shortcut, .dp-clear { background:none; color:var(--muted); border:1px solid var(--border); border-radius:3px; padding:3px 10px; font-size:11px; cursor:pointer; font-weight:500; }
+.dp-today:hover, .dp-shortcut:hover, .dp-clear:hover { color:var(--text); border-color:var(--dim); }
 </style>
 </head>
 <body>
@@ -104,8 +121,167 @@ button.cancel { background: var(--surface); color: var(--muted); }
     </div>
   </form>
 </div>
+<div id="dp" class="dp-overlay" style="display:none" onclick="dpHide(event)">
+  <div class="dp-popup" onclick="event.stopPropagation()">
+    <div class="dp-head">
+      <button type="button" class="dp-nav" onclick="dpMonth(-1)">&larr;</button>
+      <span id="dp-title"></span>
+      <button type="button" class="dp-nav" onclick="dpMonth(1)">&rarr;</button>
+    </div>
+    <table class="dp-days" id="dp-grid"></table>
+    <div class="dp-foot">
+      <span id="dp-info" class="dp-info"></span>
+      <button type="button" class="dp-today" onclick="dpPickToday()">Today</button>
+      <button type="button" class="dp-shortcut" onclick="dpPickTomorrow()">Tomorrow</button>
+      <button type="button" class="dp-shortcut" onclick="dpPickNextMon()">Next Mon</button>
+      <button type="button" class="dp-clear" onclick="dpClear()">Clear</button>
+    </div>
+  </div>
+</div>
 <script>
 var mode = {{.Mode}};
+
+// ── date picker ──────────────────────────────────────────────────────
+var dpInput = null;
+var dpYear = 0, dpMonthIdx = 0;
+var dpTarget = null; // which field: 'scheduled' or 'deadline'
+
+function dpShow(input) {
+  dpInput = input;
+  dpTarget = input.name;
+  var p = input.value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (p) {
+    dpYear = parseInt(p[1],10);
+    dpMonthIdx = parseInt(p[2],10) - 1;
+  } else {
+    var d = new Date();
+    dpYear = d.getFullYear();
+    dpMonthIdx = d.getMonth();
+  }
+  dpRender();
+  document.getElementById('dp').style.display = '';
+}
+
+function dpHide(ev) {
+  if (ev && ev.target !== ev.currentTarget) return;
+  document.getElementById('dp').style.display = 'none';
+  dpInput = null;
+}
+
+function dpMonth(delta) {
+  dpMonthIdx += delta;
+  if (dpMonthIdx > 11) { dpMonthIdx = 0; dpYear++; }
+  if (dpMonthIdx < 0) { dpMonthIdx = 11; dpYear--; }
+  dpRender();
+}
+
+var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function dpRender() {
+  document.getElementById('dp-title').textContent = MONTHS[dpMonthIdx] + ' ' + dpYear;
+  var grid = document.getElementById('dp-grid');
+  grid.innerHTML = '';
+  var first = (new Date(dpYear, dpMonthIdx, 1).getDay() + 6) % 7; // 0=Mon
+  // day-of-week header
+  var hdr = document.createElement('tr');
+  ['Mo','Tu','We','Th','Fr','Sa','Su'].forEach(function(d) {
+    var th = document.createElement('th'); th.textContent = d; hdr.appendChild(th);
+  });
+  grid.appendChild(hdr);
+  // today reference
+  var today = new Date();
+  var tdY = today.getFullYear(), tdM = today.getMonth(), tdD = today.getDate();
+  // currently set date
+  var curD = -1;
+  if (dpInput) {
+    var m = dpInput.value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) curD = parseInt(m[3],10);
+  }
+  var daysInMonth = new Date(dpYear, dpMonthIdx+1, 0).getDate();
+  var row = document.createElement('tr');
+  // leading blanks
+  for (var i=0; i<first; i++) { var td = document.createElement('td'); row.appendChild(td); }
+  for (var d=1; d<=daysInMonth; d++) {
+    var td = document.createElement('td');
+    td.textContent = d;
+    if (dpYear===tdY && dpMonthIdx===tdM && d===tdD) td.className = 'dp-today';
+    if (dpYear===tdY && dpMonthIdx===tdM && d===curD) td.className = 'dp-sel';
+    (function(day){ td.onclick = function(){ dpPick(day); }; })(d);
+    row.appendChild(td);
+    var dow = (first + d - 1) % 7;
+    if (dow === 6 && d < daysInMonth) { grid.appendChild(row); row = document.createElement('tr'); }
+  }
+  grid.appendChild(row);
+  // show repeater hint
+  var info = document.getElementById('dp-info');
+  var rpt = dpInput ? (dpInput.value.match(/[.+]+\d+[hdwmy]/) || [''])[0] : '';
+  info.textContent = rpt || '';
+}
+
+function dpPick(day) {
+  if (!dpInput) return;
+  var val = '';
+  if (day > 0) {
+    var ds = dpYear + '-' + String(dpMonthIdx+1).padStart(2,'0') + '-' + String(day).padStart(2,'0');
+    // preserve time and repeater suffix from current value
+    var cur = dpInput.value.trim();
+    var time = (cur.match(/\d{1,2}:\d{2}/) || [''])[0];
+    var rpt = (cur.match(/[.+]+\d+[hdwmy]/) || [''])[0];
+    val = ds;
+    if (time) val += ' ' + time;
+    if (rpt) val += ' ' + rpt;
+  }
+  dpInput.value = val;
+  // trigger input event so any listeners fire
+  dpInput.dispatchEvent(new Event('input', {bubbles:true}));
+  document.getElementById('dp').style.display = 'none';
+  dpInput = null;
+}
+
+function dpPickToday() {
+  var d = new Date();
+  dpYear = d.getFullYear(); dpMonthIdx = d.getMonth();
+  dpPick(d.getDate());
+}
+
+function dpPickTomorrow() {
+  if (!dpInput) return;
+  var d = new Date();
+  d.setDate(d.getDate() + 1);
+  dpInput.value = fmtDate(d);
+  dpInput.dispatchEvent(new Event('input', {bubbles:true}));
+  document.getElementById('dp').style.display = 'none';
+  dpInput = null;
+}
+
+function dpPickNextMon() {
+  if (!dpInput) return;
+  var d = new Date();
+  var dow = d.getDay();
+  var daysUntil = dow === 0 ? 1 : 8 - dow;
+  d.setDate(d.getDate() + daysUntil);
+  dpInput.value = fmtDate(d);
+  dpInput.dispatchEvent(new Event('input', {bubbles:true}));
+  document.getElementById('dp').style.display = 'none';
+  dpInput = null;
+}
+
+function fmtDate(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function dpClear() {
+  if (dpInput) { dpInput.value = ''; dpInput.dispatchEvent(new Event('input', {bubbles:true})); }
+  document.getElementById('dp').style.display = 'none';
+  dpInput = null;
+}
+
+// wire up date inputs
+document.querySelectorAll('input[name="scheduled"], input[name="deadline"]').forEach(function(inp) {
+  inp.addEventListener('focus', function(){ dpShow(this); });
+});
+
+// ── form submit ───────────────────────────────────────────────────────
 document.getElementById('ef').addEventListener('submit', function(e) {
   e.preventDefault();
   var fd = new FormData(this);
