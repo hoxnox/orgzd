@@ -208,3 +208,49 @@ func sliceInsert(s []string, idx int, val string) []string {
 	s[idx] = val
 	return s
 }
+
+type ScheduleRef struct {
+	File string `json:"file"`
+	Line int    `json:"line"`
+}
+
+// RescheduleAll sets SCHEDULED date for each ref to newDate, preserving
+// time-of-day and repeater. Entries without SCHEDULED are skipped.
+func RescheduleAll(dir string, refs []ScheduleRef, newDate time.Time) error {
+	byFile := map[string][]int{}
+	for _, r := range refs {
+		if strings.Contains(r.File, "/") || strings.Contains(r.File, "..") {
+			return fmt.Errorf("invalid file: %s", r.File)
+		}
+		byFile[r.File] = append(byFile[r.File], r.Line)
+	}
+	for file, lineNums := range byFile {
+		path := filepath.Join(dir, file)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("%s: %w", file, err)
+		}
+		lines := strings.Split(string(data), "\n")
+		for _, ln := range lineNums {
+			idx := ln - 1
+			if idx < 0 || idx >= len(lines) {
+				continue
+			}
+			if !headlineRe.MatchString(lines[idx]) {
+				continue
+			}
+			schedIdx, schedTS := findScheduled(lines, idx)
+			if schedIdx < 0 || schedTS == nil {
+				continue
+			}
+			newT := time.Date(newDate.Year(), newDate.Month(), newDate.Day(),
+				schedTS.Time.Hour(), schedTS.Time.Minute(), 0, 0, newDate.Location())
+			newTS := formatActiveTS(newT, schedTS.HasTime, schedTS.Repeater)
+			lines[schedIdx] = replaceScheduledTS(lines[schedIdx], newTS)
+		}
+		if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644); err != nil {
+			return fmt.Errorf("writing %s: %w", file, err)
+		}
+	}
+	return nil
+}

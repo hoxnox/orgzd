@@ -67,6 +67,32 @@ func Start(addr, dir string) error {
 		}
 	})
 
+	http.HandleFunc("POST /api/reschedule-overdue", func(w http.ResponseWriter, r *http.Request) {
+		entries, err := org.ParseDir(dir)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		now := time.Now()
+		today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		var refs []org.ScheduleRef
+		for _, e := range entries {
+			if e.IsDone || e.Scheduled == nil {
+				continue
+			}
+			d := time.Date(e.Scheduled.Time.Year(), e.Scheduled.Time.Month(), e.Scheduled.Time.Day(), 0, 0, 0, 0, now.Location())
+			if !d.Before(today) {
+				continue
+			}
+			refs = append(refs, org.ScheduleRef{File: e.File, Line: e.Line})
+		}
+		if err := org.RescheduleAll(dir, refs, today); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.WriteHeader(200)
+	})
+
 	http.HandleFunc("POST /api/done", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			File string `json:"file"`
