@@ -79,7 +79,16 @@ func Build(entries []*org.Entry, now time.Time) []Group {
 	}
 
 	for _, b := range buckets {
-		sort.Slice(*b, func(i, j int) bool { return (*b)[i].Date.Before((*b)[j].Date) })
+		sort.SliceStable(*b, func(i, j int) bool {
+			a, c := (*b)[i], (*b)[j]
+			if !a.Date.Equal(c.Date) {
+				return a.Date.Before(c.Date)
+			}
+			if a.File != c.File {
+				return a.File < c.File
+			}
+			return a.Line < c.Line
+		})
 	}
 
 	var groups []Group
