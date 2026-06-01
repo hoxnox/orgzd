@@ -1,0 +1,16 @@
+# /etc/conf.d/orgzd — sourced by /etc/init.d/orgzd
+#
+# All variables are optional; defaults are shown in the init script.
+
+# User and group to run orgzd as. Must have read+write access to ORGZD_DIR.
+#ORGZD_USER="syncthing"
+#ORGZD_GROUP="syncthing"
+
+# Path to orgzd binary.
+#ORGZD_BIN="/usr/local/bin/orgzd"
+
+# Directory with org files.
+#ORGZD_DIR="/home/hoxnox/todo"
+
+# HTTP listen address (host:port; :PORT for all interfaces).
+#ORGZD_LISTEN="127.0.0.1:8042"

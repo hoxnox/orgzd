@@ -1,0 +1,33 @@
+#!/sbin/openrc-run
+# OpenRC init script for orgzd
+#
+# Install:
+#   cp init/orgzd.openrc /etc/init.d/orgzd && chmod +x /etc/init.d/orgzd
+#   cp init/orgzd.confd  /etc/conf.d/orgzd
+#   rc-update add orgzd default
+#   rc-service orgzd start
+#
+# Logs: /var/log/orgzd.log (stdout/stderr from supervise-daemon)
+
+description="orgzd — org-mode agenda web server"
+
+: ${ORGZD_BIN:=/usr/local/bin/orgzd}
+: ${ORGZD_USER:=syncthing}
+: ${ORGZD_GROUP:=${ORGZD_USER}}
+: ${ORGZD_DIR:=/home/${ORGZD_USER}/todo}
+: ${ORGZD_LISTEN:=127.0.0.1:8042}
+
+supervisor=supervise-daemon
+command="${ORGZD_BIN}"
+command_args="-dir ${ORGZD_DIR} -listen ${ORGZD_LISTEN}"
+command_user="${ORGZD_USER}:${ORGZD_GROUP}"
+pidfile="/run/${RC_SVCNAME}.pid"
+respawn_delay=3
+respawn_max=10
+output_log="/var/log/${RC_SVCNAME}.log"
+error_log="/var/log/${RC_SVCNAME}.log"
+
+depend() {
+	need net
+	use logger
+}

@@ -1,0 +1,41 @@
+# systemd unit for orgzd
+#
+# Install:
+#   cp init/orgzd.service /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now orgzd
+#
+# Override defaults:
+#   systemctl edit orgzd
+#   # then add an [Service] block with Environment= lines
+#
+# Logs: journalctl -u orgzd -f
+
+[Unit]
+Description=orgzd — org-mode agenda web server
+After=network.target
+
+[Service]
+Type=simple
+User=syncthing
+Group=syncthing
+
+Environment=ORGZD_DIR=/home/hoxnox/todo
+Environment=ORGZD_LISTEN=127.0.0.1:8042
+
+ExecStart=/usr/local/bin/orgzd -dir ${ORGZD_DIR} -listen ${ORGZD_LISTEN}
+
+Restart=on-failure
+RestartSec=3
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/hoxnox/todo
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+[Install]
+WantedBy=multi-user.target
