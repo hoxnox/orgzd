@@ -23,7 +23,8 @@ command_args="-dir ${ORGZD_DIR} -listen ${ORGZD_LISTEN}"
 command_user="${ORGZD_USER}:${ORGZD_GROUP}"
 pidfile="/run/${RC_SVCNAME}.pid"
 respawn_delay=3
-respawn_max=10
+respawn_max=5
+respawn_period=60
 output_log="/var/log/${RC_SVCNAME}.log"
 error_log="/var/log/${RC_SVCNAME}.log"
 
