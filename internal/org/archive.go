@@ -34,7 +34,7 @@ func FindArchivable(dir string) ([]ArchiveCandidate, error) {
 	var result []ArchiveCandidate
 	for _, f := range files {
 		base := filepath.Base(f)
-		if base == "archive.org" {
+		if base == "archive.org" || IsSyncConflict(base) {
 			continue
 		}
 		data, err := os.ReadFile(f)

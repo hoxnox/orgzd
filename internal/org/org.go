@@ -71,6 +71,9 @@ func ParseDir(dir string) ([]*Entry, error) {
 	}
 	var all []*Entry
 	for _, f := range files {
+		if IsSyncConflict(filepath.Base(f)) {
+			continue
+		}
 		entries, err := ParseFile(f)
 		if err != nil {
 			log.Printf("warning: %s: %v", f, err)

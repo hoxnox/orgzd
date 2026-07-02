@@ -33,6 +33,12 @@ func main() {
 }
 
 func printAgenda(dir string) {
+	if byBase, err := org.FindConflictFiles(dir); err == nil && len(byBase) > 0 {
+		for base, cs := range byBase {
+			fmt.Printf("\033[1;33m! sync conflict:\033[0m %s (%s)\n", base, strings.Join(cs, ", "))
+		}
+		fmt.Println("\033[90m  open the web UI to merge\033[0m")
+	}
 	entries, err := org.ParseDir(dir)
 	if err != nil {
 		log.Fatal(err)

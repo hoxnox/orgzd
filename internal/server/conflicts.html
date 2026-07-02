@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>orgzd — conflicts</title>
+<style>
+:root {
+  --bg: #0f0f0f; --surface: #1a1a1a; --border: #2a2a2a;
+  --text: #d4d4d4; --muted: #666; --dim: #444;
+  --accent: #5b9bd5; --red: #e06c75; --green: #98c379; --yellow: #e5c07b;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); }
+.wrap { max-width: 800px; margin: 0 auto; padding: 24px 16px; }
+header h1 { font-size: 20px; color: var(--accent); font-weight: 600; }
+header .date { font-size: 13px; color: var(--muted); margin-top: 2px; }
+nav { margin-top: 12px; margin-bottom: 20px; }
+nav a { color: var(--muted); text-decoration: none; margin-right: 20px; font-size: 13px; padding-bottom: 4px; }
+nav a:hover { color: var(--text); }
+nav a.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
+.pair { margin-top: 24px; border: 1px solid var(--border); border-radius: 6px; padding: 12px; }
+.pair h2 { font-size: 14px; color: var(--yellow); font-weight: 600; }
+.pair .sub { font-size: 12px; color: var(--muted); margin-top: 2px; word-break: break-all; }
+.pair .err { font-size: 12px; color: var(--red); margin-top: 6px; }
+.item { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+.item .ititle { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.vers { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 640px) { .vers { grid-template-columns: 1fr; } }
+.ver { border: 1px solid var(--border); border-radius: 4px; padding: 8px; cursor: pointer; }
+.ver:hover { border-color: var(--muted); }
+.ver.sel { border-color: var(--green); background: var(--surface); }
+.ver .vlabel { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 6px; display: flex; gap: 6px; align-items: center; }
+.ver.sel .vlabel { color: var(--green); }
+.ver pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; line-height: 1.45; font-family: ui-monospace, monospace; color: var(--text); }
+.actions { margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap; }
+.btn { background: none; border: 1px solid var(--accent); color: var(--accent); font-size: 12px; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-family: inherit; }
+.btn:hover { background: var(--accent); color: #111; }
+.btn.danger { border-color: var(--red); color: var(--red); }
+.btn.danger:hover { background: var(--red); color: #111; }
+.btn:disabled { opacity: 0.4; cursor: default; }
+.note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+.empty { margin-top: 32px; font-size: 14px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>orgzd</h1>
+    <div class="date">{{.DateStr}}</div>
+  </header>
+  <nav>
+    <a href="/">Agenda</a>
+    <a href="/maintenance">Maintenance</a>
+    <a href="/conflicts" class="active">Conflicts</a>
+  </nav>
+
+  {{if not .Pairs}}
+  <div class="empty">No sync conflicts. Everything that could be merged automatically has been merged.</div>
+  {{end}}
+
+  {{range $pi, $p := .Pairs}}
+  <div class="pair" data-base="{{$p.Base}}" data-conflict="{{$p.Conflict}}">
+    <h2>{{$p.Base}}</h2>
+    <div class="sub">conflict copy: {{$p.Conflict}}</div>
+    {{if $p.Err}}<div class="err">{{$p.Err}}</div>{{end}}
+    {{range $ii, $it := $p.Items}}
+    <div class="item" data-key="{{$it.Key}}">
+      <div class="ititle">{{$it.Title}}</div>
+      <div class="vers">
+        <div class="ver sel" data-choice="base">
+          <div class="vlabel">keep {{$p.Base}}</div>
+          <pre>{{$it.BaseText}}</pre>
+        </div>
+        <div class="ver" data-choice="other">
+          <div class="vlabel">keep conflict version</div>
+          <pre>{{$it.OtherText}}</pre>
+        </div>
+      </div>
+    </div>
+    {{end}}
+    <div class="actions">
+      {{if not $p.Err}}<button class="btn apply">Merge with selected versions</button>{{end}}
+      <button class="btn danger discard">Discard conflict file (keep {{$p.Base}} as-is)</button>
+    </div>
+    <div class="note">Entries differing only in state or dates are merged automatically; entries present in one file only are kept. Originals are backed up to the orgzd cache before any change.</div>
+  </div>
+  {{end}}
+</div>
+<script>
+document.querySelectorAll('.ver').forEach(function(v){
+  v.addEventListener('click', function(){
+    v.closest('.vers').querySelectorAll('.ver').forEach(function(o){ o.classList.remove('sel'); });
+    v.classList.add('sel');
+  });
+});
+function post(url, body, btn) {
+  btn.disabled = true;
+  fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)})
+    .then(function(r){
+      if (r.ok) location.reload();
+      else r.text().then(function(t){ alert(t); btn.disabled = false; });
+    });
+}
+document.querySelectorAll('.pair .apply').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var pair = btn.closest('.pair');
+    var choices = {};
+    pair.querySelectorAll('.item').forEach(function(it){
+      choices[it.dataset.key] = it.querySelector('.ver.sel').dataset.choice;
+    });
+    post('/api/conflicts/resolve', {base: pair.dataset.base, conflict: pair.dataset.conflict, choices: choices}, btn);
+  });
+});
+document.querySelectorAll('.pair .discard').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var pair = btn.closest('.pair');
+    if (!confirm('Delete ' + pair.dataset.conflict + '? Its unmerged changes will be lost (a backup copy is kept in the cache).')) return;
+    post('/api/conflicts/delete', {conflict: pair.dataset.conflict}, btn);
+  });
+});
+</script>
+</body>
+</html>

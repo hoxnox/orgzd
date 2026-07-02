@@ -9,21 +9,41 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"orgzd/internal/agenda"
 	"orgzd/internal/org"
 )
 
-//go:embed agenda.html maintenance.html tag.html edit.html
+//go:embed agenda.html maintenance.html tag.html edit.html conflicts.html
 var tmplFS embed.FS
 
 var (
-	agendaTmpl = template.Must(template.ParseFS(tmplFS, "agenda.html"))
-	maintTmpl  = template.Must(template.ParseFS(tmplFS, "maintenance.html"))
-	tagTmpl    = template.Must(template.ParseFS(tmplFS, "tag.html"))
-	editTmpl   = template.Must(template.ParseFS(tmplFS, "edit.html"))
+	agendaTmpl    = template.Must(template.ParseFS(tmplFS, "agenda.html"))
+	maintTmpl     = template.Must(template.ParseFS(tmplFS, "maintenance.html"))
+	tagTmpl       = template.Must(template.ParseFS(tmplFS, "tag.html"))
+	editTmpl      = template.Must(template.ParseFS(tmplFS, "edit.html"))
+	conflictsTmpl = template.Must(template.ParseFS(tmplFS, "conflicts.html"))
 )
+
+// mergeMu serializes conflict auto-merging so concurrent page loads
+// don't merge the same files twice.
+var mergeMu sync.Mutex
+
+func autoMergeConflicts(dir string) []org.ConflictPair {
+	mergeMu.Lock()
+	defer mergeMu.Unlock()
+	merged, remaining, err := org.AutoMergeConflicts(dir)
+	if err != nil {
+		log.Printf("conflict scan: %v", err)
+		return nil
+	}
+	for _, p := range merged {
+		log.Printf("auto-merged %s into %s (resolved %d, added %d)", p.Conflict, p.Base, p.AutoResolved, p.Added)
+	}
+	return remaining
+}
 
 func parseTagsInput(s string) []string {
 	var tags []string
@@ -48,6 +68,7 @@ type editFormData struct {
 
 func Start(addr, dir string) error {
 	http.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		conflicts := autoMergeConflicts(dir)
 		entries, err := org.ParseDir(dir)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
@@ -55,11 +76,13 @@ func Start(addr, dir string) error {
 		}
 		groups := agenda.Build(entries, time.Now())
 		data := struct {
-			DateStr string
-			Groups  []agenda.Group
+			DateStr       string
+			Groups        []agenda.Group
+			ConflictCount int
 		}{
-			DateStr: time.Now().Format("Monday, 02 January 2006"),
-			Groups:  groups,
+			DateStr:       time.Now().Format("Monday, 02 January 2006"),
+			Groups:        groups,
+			ConflictCount: len(conflicts),
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := agendaTmpl.Execute(w, data); err != nil {
@@ -168,6 +191,59 @@ func Start(addr, dir string) error {
 			return
 		}
 		if err := org.Archive(dir, req.Entries, time.Now()); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.WriteHeader(200)
+	})
+
+	http.HandleFunc("GET /conflicts", func(w http.ResponseWriter, r *http.Request) {
+		conflicts := autoMergeConflicts(dir)
+		data := struct {
+			DateStr string
+			Pairs   []org.ConflictPair
+		}{
+			DateStr: time.Now().Format("Monday, 02 January 2006"),
+			Pairs:   conflicts,
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := conflictsTmpl.Execute(w, data); err != nil {
+			log.Printf("template: %v", err)
+		}
+	})
+
+	http.HandleFunc("POST /api/conflicts/resolve", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Base     string            `json:"base"`
+			Conflict string            `json:"conflict"`
+			Choices  map[string]string `json:"choices"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		mergeMu.Lock()
+		err := org.ResolveConflict(dir, req.Base, req.Conflict, req.Choices)
+		mergeMu.Unlock()
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.WriteHeader(200)
+	})
+
+	http.HandleFunc("POST /api/conflicts/delete", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Conflict string `json:"conflict"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		mergeMu.Lock()
+		err := org.DeleteConflictFile(dir, req.Conflict)
+		mergeMu.Unlock()
+		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}

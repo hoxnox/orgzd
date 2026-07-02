@@ -28,7 +28,7 @@ func ListFiles(dir string) ([]string, error) {
 	var files []string
 	for _, m := range matches {
 		base := filepath.Base(m)
-		if base == "archive.org" {
+		if base == "archive.org" || IsSyncConflict(base) {
 			continue
 		}
 		files = append(files, base)

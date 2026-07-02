@@ -56,6 +56,12 @@ details.e summary::-webkit-details-marker { display: none; }
   margin-left: 8px; font-family: inherit;
 }
 .move-all:hover { background: var(--red); color: #111; }
+.conflict-banner {
+  display: block; margin-top: 16px; padding: 8px 12px; border-radius: 4px;
+  border: 1px solid var(--yellow); color: var(--yellow); text-decoration: none;
+  font-size: 13px;
+}
+.conflict-banner:hover { background: var(--yellow); color: #111; }
 nav { margin-top: 12px; margin-bottom: 20px; }
 nav a {
   color: var(--muted); text-decoration: none; margin-right: 20px;
@@ -87,6 +93,9 @@ nav a.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
     <a href="/maintenance">Maintenance</a>
     <a href="/new">+ New</a>
   </nav>
+  {{if .ConflictCount}}
+  <a class="conflict-banner" href="/conflicts">&#9888; {{.ConflictCount}} sync conflict{{if gt .ConflictCount 1}}s{{end}} could not be merged automatically &mdash; resolve</a>
+  {{end}}
   {{range .Groups}}
   <div class="group">
     <div class="glabel {{.Type}}">
