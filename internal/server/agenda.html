@@ -56,6 +56,19 @@ details.e summary::-webkit-details-marker { display: none; }
   margin-left: 8px; font-family: inherit;
 }
 .move-all:hover { background: var(--red); color: #111; }
+.move-all.acc { border-color: var(--accent); color: var(--accent); }
+.move-all.acc:hover { background: var(--accent); color: #111; }
+details.inbox { margin-top: 24px; }
+details.inbox > summary.glabel { cursor: pointer; list-style: none; }
+details.inbox > summary.glabel::-webkit-details-marker { display: none; }
+details.inbox > summary.glabel .arr { display: inline-block; transition: transform 0.15s; margin-right: 4px; }
+details.inbox[open] > summary.glabel .arr { transform: rotate(90deg); }
+.qs {
+  background: none; border: 1px solid var(--border); color: var(--muted);
+  font-size: 10px; padding: 1px 6px; border-radius: 3px; cursor: pointer;
+  flex-shrink: 0; font-family: inherit;
+}
+.qs:hover { border-color: var(--accent); color: var(--accent); }
 .conflict-banner {
   display: block; margin-top: 16px; padding: 8px 12px; border-radius: 4px;
   border: 1px solid var(--yellow); color: var(--yellow); text-decoration: none;
@@ -95,6 +108,34 @@ nav a.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
   </nav>
   {{if .ConflictCount}}
   <a class="conflict-banner" href="/conflicts">&#9888; {{.ConflictCount}} sync conflict{{if gt .ConflictCount 1}}s{{end}} could not be merged automatically &mdash; resolve</a>
+  {{end}}
+  {{if .Inbox}}
+  <details class="inbox">
+    <summary class="glabel">
+      <span><span class="arr">&#9656;</span>Inbox
+        <button class="move-all acc sched-all" data-when="today">&rarr; today</button>
+        <button class="move-all acc sched-all" data-when="tomorrow">&rarr; tomorrow</button>
+      </span>
+      <span>{{len .Inbox}}</span>
+    </summary>
+    {{range .Inbox}}
+    <details class="e">
+      <summary>
+        <button class="cb" data-file="{{.File}}" data-line="{{.Line}}">&nbsp;</button>
+        {{if .State}}<span class="st st-{{.State}}">{{.State}}</span>{{end}}
+        <span class="title">{{.Title}}</span>
+        {{range .Tags}}<a class="tag" href="/tag/{{.}}" onclick="event.stopPropagation()">{{.}}</a>{{end}}
+        <button class="qs" data-file="{{.File}}" data-line="{{.Line}}" data-when="today">today</button>
+        <button class="qs" data-file="{{.File}}" data-line="{{.Line}}" data-when="tomorrow">tmrw</button>
+        {{if .Body}}<span class="has-body">&middot;&middot;&middot;</span>{{end}}
+      </summary>
+      <div class="detail">
+        <div class="dline"><span class="dk">@</span> {{.File}}:{{.Line}} <a href="/edit/{{.File}}/{{.Line}}" style="color:var(--accent);text-decoration:none;margin-left:8px">edit</a></div>
+        {{if .Body}}<pre class="body">{{.Body}}</pre>{{end}}
+      </div>
+    </details>
+    {{end}}
+  </details>
   {{end}}
   {{range .Groups}}
   <div class="group">
@@ -137,6 +178,37 @@ function moveOverdueToday() {
     else r.text().then(function(t){ alert(t); });
   });
 }
+function scheduleEntries(entries, when) {
+  fetch('/api/schedule', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({entries: entries, when: when})
+  }).then(function(r){
+    if (r.ok) location.reload();
+    else r.text().then(function(t){ alert(t); });
+  });
+}
+document.querySelectorAll('.qs').forEach(function(btn){
+  btn.addEventListener('click', function(e){
+    e.stopPropagation();
+    e.preventDefault();
+    btn.disabled = true;
+    scheduleEntries([{file: btn.dataset.file, line: parseInt(btn.dataset.line)}], btn.dataset.when);
+  });
+});
+document.querySelectorAll('.sched-all').forEach(function(btn){
+  btn.addEventListener('click', function(e){
+    e.stopPropagation();
+    e.preventDefault();
+    var entries = [];
+    document.querySelectorAll('details.inbox .qs[data-when="today"]').forEach(function(b){
+      entries.push({file: b.dataset.file, line: parseInt(b.dataset.line)});
+    });
+    if (!entries.length) return;
+    btn.disabled = true;
+    scheduleEntries(entries, btn.dataset.when);
+  });
+});
 document.querySelectorAll('.cb').forEach(function(btn){
   btn.addEventListener('click',function(e){
     e.stopPropagation();

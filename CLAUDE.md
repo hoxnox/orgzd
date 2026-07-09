@@ -55,5 +55,6 @@ Syncthing renames the losing copy of a concurrently-edited file to `name.sync-co
 ## User-facing behaviours worth knowing
 
 - Web page auto-refreshes every 60 s (`<meta http-equiv="refresh">`).
+- **Inbox block**: not-done entries of `inbox.org` that have no SCHEDULED/DEADLINE are shown in a collapsed `<details>` block below the agenda groups (hidden when empty). Quick buttons schedule a single entry or the whole inbox to today/tomorrow via `POST /api/schedule`; once dated, an entry graduates to the normal date buckets (it stays in `inbox.org`). `RescheduleAll` inserts a SCHEDULED line when the entry has none, processing lines in descending order per file so insertions don't shift pending line numbers.
 - The done checkbox is a styled `<button>`, not an `<input type="checkbox">`, because clicks inside a `<summary>` natively toggle the `<details>` — using a button lets us fully control the event.
 - Maintenance page UX is "exclude, not include": every DONE entry starts checked, since the typical operation archives nearly everything; the user unchecks the few to keep. With ~700 entries this matters.

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -215,7 +216,9 @@ type ScheduleRef struct {
 }
 
 // RescheduleAll sets SCHEDULED date for each ref to newDate, preserving
-// time-of-day and repeater. Entries without SCHEDULED are skipped.
+// time-of-day and repeater. Entries without SCHEDULED get one inserted
+// (inbox-style undated tasks). Lines are processed in descending order
+// per file so insertions don't invalidate the remaining line numbers.
 func RescheduleAll(dir string, refs []ScheduleRef, newDate time.Time) error {
 	byFile := map[string][]int{}
 	for _, r := range refs {
@@ -231,6 +234,7 @@ func RescheduleAll(dir string, refs []ScheduleRef, newDate time.Time) error {
 			return fmt.Errorf("%s: %w", file, err)
 		}
 		lines := strings.Split(string(data), "\n")
+		sort.Sort(sort.Reverse(sort.IntSlice(lineNums)))
 		for _, ln := range lineNums {
 			idx := ln - 1
 			if idx < 0 || idx >= len(lines) {
@@ -240,17 +244,27 @@ func RescheduleAll(dir string, refs []ScheduleRef, newDate time.Time) error {
 				continue
 			}
 			schedIdx, schedTS := findScheduled(lines, idx)
-			if schedIdx < 0 || schedTS == nil {
+			if schedIdx >= 0 && schedTS != nil {
+				newT := time.Date(newDate.Year(), newDate.Month(), newDate.Day(),
+					schedTS.Time.Hour(), schedTS.Time.Minute(), 0, 0, newDate.Location())
+				newTS := formatActiveTS(newT, schedTS.HasTime, schedTS.Repeater)
+				lines[schedIdx] = replaceScheduledTS(lines[schedIdx], newTS)
 				continue
 			}
-			newT := time.Date(newDate.Year(), newDate.Month(), newDate.Day(),
-				schedTS.Time.Hour(), schedTS.Time.Minute(), 0, 0, newDate.Location())
-			newTS := formatActiveTS(newT, schedTS.HasTime, schedTS.Repeater)
-			lines[schedIdx] = replaceScheduledTS(lines[schedIdx], newTS)
+			schedStr := "SCHEDULED: " + formatActiveTS(newDate, false, "")
+			if idx+1 < len(lines) && isPlanningLine(lines[idx+1]) {
+				lines[idx+1] = schedStr + " " + strings.TrimSpace(lines[idx+1])
+			} else {
+				lines = sliceInsert(lines, idx+1, schedStr)
+			}
 		}
 		if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644); err != nil {
 			return fmt.Errorf("writing %s: %w", file, err)
 		}
 	}
 	return nil
+}
+
+func isPlanningLine(line string) bool {
+	return strings.Contains(line, "SCHEDULED:") || strings.Contains(line, "DEADLINE:") || strings.Contains(line, "CLOSED:")
 }

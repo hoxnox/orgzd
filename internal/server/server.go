@@ -75,13 +75,21 @@ func Start(addr, dir string) error {
 			return
 		}
 		groups := agenda.Build(entries, time.Now())
+		var inbox []*org.Entry
+		for _, e := range entries {
+			if e.File == "inbox.org" && !e.IsDone && e.Scheduled == nil && e.Deadline == nil {
+				inbox = append(inbox, e)
+			}
+		}
 		data := struct {
 			DateStr       string
 			Groups        []agenda.Group
+			Inbox         []*org.Entry
 			ConflictCount int
 		}{
 			DateStr:       time.Now().Format("Monday, 02 January 2006"),
 			Groups:        groups,
+			Inbox:         inbox,
 			ConflictCount: len(conflicts),
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -110,6 +118,36 @@ func Start(addr, dir string) error {
 			refs = append(refs, org.ScheduleRef{File: e.File, Line: e.Line})
 		}
 		if err := org.RescheduleAll(dir, refs, today); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.WriteHeader(200)
+	})
+
+	http.HandleFunc("POST /api/schedule", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Entries []org.ScheduleRef `json:"entries"`
+			When    string            `json:"when"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		if len(req.Entries) == 0 {
+			http.Error(w, "no entries", 400)
+			return
+		}
+		now := time.Now()
+		date := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		switch req.When {
+		case "today":
+		case "tomorrow":
+			date = date.AddDate(0, 0, 1)
+		default:
+			http.Error(w, "when must be today or tomorrow", 400)
+			return
+		}
+		if err := org.RescheduleAll(dir, req.Entries, date); err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
