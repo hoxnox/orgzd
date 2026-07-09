@@ -243,20 +243,7 @@ func RescheduleAll(dir string, refs []ScheduleRef, newDate time.Time) error {
 			if !headlineRe.MatchString(lines[idx]) {
 				continue
 			}
-			schedIdx, schedTS := findScheduled(lines, idx)
-			if schedIdx >= 0 && schedTS != nil {
-				newT := time.Date(newDate.Year(), newDate.Month(), newDate.Day(),
-					schedTS.Time.Hour(), schedTS.Time.Minute(), 0, 0, newDate.Location())
-				newTS := formatActiveTS(newT, schedTS.HasTime, schedTS.Repeater)
-				lines[schedIdx] = replaceScheduledTS(lines[schedIdx], newTS)
-				continue
-			}
-			schedStr := "SCHEDULED: " + formatActiveTS(newDate, false, "")
-			if idx+1 < len(lines) && isPlanningLine(lines[idx+1]) {
-				lines[idx+1] = schedStr + " " + strings.TrimSpace(lines[idx+1])
-			} else {
-				lines = sliceInsert(lines, idx+1, schedStr)
-			}
+			lines = setScheduled(lines, idx, newDate)
 		}
 		if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644); err != nil {
 			return fmt.Errorf("writing %s: %w", file, err)
@@ -267,4 +254,120 @@ func RescheduleAll(dir string, refs []ScheduleRef, newDate time.Time) error {
 
 func isPlanningLine(line string) bool {
 	return strings.Contains(line, "SCHEDULED:") || strings.Contains(line, "DEADLINE:") || strings.Contains(line, "CLOSED:")
+}
+
+// setScheduled updates the SCHEDULED date of the headline at idx,
+// preserving time-of-day and repeater, or inserts a SCHEDULED line
+// when the entry has none.
+func setScheduled(lines []string, idx int, newDate time.Time) []string {
+	schedIdx, schedTS := findScheduled(lines, idx)
+	if schedIdx >= 0 && schedTS != nil {
+		newT := time.Date(newDate.Year(), newDate.Month(), newDate.Day(),
+			schedTS.Time.Hour(), schedTS.Time.Minute(), 0, 0, newDate.Location())
+		newTS := formatActiveTS(newT, schedTS.HasTime, schedTS.Repeater)
+		lines[schedIdx] = replaceScheduledTS(lines[schedIdx], newTS)
+		return lines
+	}
+	schedStr := "SCHEDULED: " + formatActiveTS(newDate, false, "")
+	if idx+1 < len(lines) && isPlanningLine(lines[idx+1]) {
+		lines[idx+1] = schedStr + " " + strings.TrimSpace(lines[idx+1])
+	} else {
+		lines = sliceInsert(lines, idx+1, schedStr)
+	}
+	return lines
+}
+
+type MoveScheduleRef struct {
+	File   string `json:"file"`
+	Line   int    `json:"line"`
+	Target string `json:"target"`
+}
+
+// ScheduleMove sets SCHEDULED to newDate for each ref and moves the
+// entry's subtree to its Target file. An empty Target (or the source
+// file itself) schedules in place. Source lines are processed in
+// descending order so removals/insertions don't shift pending refs;
+// targets are appended before the source is rewritten, so a failure
+// in between can only duplicate an entry, never lose it.
+func ScheduleMove(dir string, refs []MoveScheduleRef, newDate time.Time) error {
+	byFile := map[string][]MoveScheduleRef{}
+	for _, r := range refs {
+		for _, n := range []string{r.File, r.Target} {
+			if strings.Contains(n, "/") || strings.Contains(n, "..") {
+				return fmt.Errorf("invalid file: %s", n)
+			}
+		}
+		if r.Target != "" && !strings.HasSuffix(r.Target, ".org") {
+			return fmt.Errorf("invalid target: %s", r.Target)
+		}
+		byFile[r.File] = append(byFile[r.File], r)
+	}
+
+	for file, frefs := range byFile {
+		sort.Slice(frefs, func(i, j int) bool { return frefs[i].Line > frefs[j].Line })
+		path := filepath.Join(dir, file)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("%s: %w", file, err)
+		}
+		lines := strings.Split(string(data), "\n")
+		var appends []struct {
+			target string
+			block  []string
+		}
+
+		for _, r := range frefs {
+			idx := r.Line - 1
+			if idx < 0 || idx >= len(lines) {
+				continue
+			}
+			m := headlineRe.FindStringSubmatch(lines[idx])
+			if m == nil {
+				continue
+			}
+			if r.Target == "" || r.Target == file {
+				lines = setScheduled(lines, idx, newDate)
+				continue
+			}
+
+			level := len(m[1])
+			endIdx := len(lines)
+			for j := idx + 1; j < len(lines); j++ {
+				if m2 := headlineRe.FindStringSubmatch(lines[j]); m2 != nil && len(m2[1]) <= level {
+					endIdx = j
+					break
+				}
+			}
+			for endIdx > idx+1 && strings.TrimSpace(lines[endIdx-1]) == "" {
+				endIdx--
+			}
+
+			block := make([]string, endIdx-idx)
+			copy(block, lines[idx:endIdx])
+			block = setScheduled(block, 0, newDate)
+			appends = append(appends, struct {
+				target string
+				block  []string
+			}{r.Target, block})
+
+			lines = append(lines[:idx], lines[endIdx:]...)
+		}
+
+		for _, a := range appends {
+			f, err := os.OpenFile(filepath.Join(dir, a.target), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+			if err != nil {
+				return fmt.Errorf("%s: %w", a.target, err)
+			}
+			_, err = f.WriteString("\n" + strings.Join(a.block, "\n") + "\n")
+			f.Close()
+			if err != nil {
+				return fmt.Errorf("%s: %w", a.target, err)
+			}
+		}
+
+		if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644); err != nil {
+			return fmt.Errorf("writing %s: %w", file, err)
+		}
+	}
+	return nil
 }

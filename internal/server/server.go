@@ -126,8 +126,8 @@ func Start(addr, dir string) error {
 
 	http.HandleFunc("POST /api/schedule", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			Entries []org.ScheduleRef `json:"entries"`
-			When    string            `json:"when"`
+			Entries []org.MoveScheduleRef `json:"entries"`
+			When    string                `json:"when"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), 400)
@@ -147,7 +147,7 @@ func Start(addr, dir string) error {
 			http.Error(w, "when must be today or tomorrow", 400)
 			return
 		}
-		if err := org.RescheduleAll(dir, req.Entries, date); err != nil {
+		if err := org.ScheduleMove(dir, req.Entries, date); err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}

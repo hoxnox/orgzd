@@ -69,6 +69,12 @@ details.inbox[open] > summary.glabel .arr { transform: rotate(90deg); }
   flex-shrink: 0; font-family: inherit;
 }
 .qs:hover { border-color: var(--accent); color: var(--accent); }
+.fs {
+  background: none; border: 1px solid var(--border); color: var(--yellow);
+  font-size: 10px; font-weight: 700; width: 22px; padding: 1px 0; border-radius: 3px;
+  cursor: pointer; flex-shrink: 0; font-family: inherit; text-align: center;
+}
+.fs:hover { border-color: var(--yellow); }
 .conflict-banner {
   display: block; margin-top: 16px; padding: 8px 12px; border-radius: 4px;
   border: 1px solid var(--yellow); color: var(--yellow); text-decoration: none;
@@ -125,6 +131,7 @@ nav a.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
         {{if .State}}<span class="st st-{{.State}}">{{.State}}</span>{{end}}
         <span class="title">{{.Title}}</span>
         {{range .Tags}}<a class="tag" href="/tag/{{.}}" onclick="event.stopPropagation()">{{.}}</a>{{end}}
+        <button class="fs" data-target="work.org" title="target file: work.org">w</button>
         <button class="qs" data-file="{{.File}}" data-line="{{.Line}}" data-when="today">today</button>
         <button class="qs" data-file="{{.File}}" data-line="{{.Line}}" data-when="tomorrow">tmrw</button>
         {{if .Body}}<span class="has-body">&middot;&middot;&middot;</span>{{end}}
@@ -188,12 +195,26 @@ function scheduleEntries(entries, when) {
     else r.text().then(function(t){ alert(t); });
   });
 }
+document.querySelectorAll('.fs').forEach(function(btn){
+  btn.addEventListener('click', function(e){
+    e.stopPropagation();
+    e.preventDefault();
+    var toHome = btn.dataset.target === 'work.org';
+    btn.dataset.target = toHome ? 'home.org' : 'work.org';
+    btn.textContent = toHome ? 'h' : 'w';
+    btn.title = 'target file: ' + btn.dataset.target;
+  });
+});
+function rowRef(row, whenBtn) {
+  var b = whenBtn || row.querySelector('.qs');
+  return {file: b.dataset.file, line: parseInt(b.dataset.line), target: row.querySelector('.fs').dataset.target};
+}
 document.querySelectorAll('.qs').forEach(function(btn){
   btn.addEventListener('click', function(e){
     e.stopPropagation();
     e.preventDefault();
     btn.disabled = true;
-    scheduleEntries([{file: btn.dataset.file, line: parseInt(btn.dataset.line)}], btn.dataset.when);
+    scheduleEntries([rowRef(btn.closest('details.e'), btn)], btn.dataset.when);
   });
 });
 document.querySelectorAll('.sched-all').forEach(function(btn){
@@ -201,8 +222,8 @@ document.querySelectorAll('.sched-all').forEach(function(btn){
     e.stopPropagation();
     e.preventDefault();
     var entries = [];
-    document.querySelectorAll('details.inbox .qs[data-when="today"]').forEach(function(b){
-      entries.push({file: b.dataset.file, line: parseInt(b.dataset.line)});
+    document.querySelectorAll('details.inbox details.e').forEach(function(row){
+      entries.push(rowRef(row));
     });
     if (!entries.length) return;
     btn.disabled = true;

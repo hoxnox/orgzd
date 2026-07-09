@@ -63,6 +63,73 @@ func TestRescheduleAllPrependsToExistingPlanningLine(t *testing.T) {
 	}
 }
 
+func TestScheduleMoveMovesToTargetWithSchedule(t *testing.T) {
+	dir := t.TempDir()
+	inbox := "#+TODO: TODO WAIT | DONE CANCELED\n\n* TODO First :vk:\nbody first\n\n* TODO Second :vk:\nbody second\n\n* TODO Third\n"
+	work := "#+TODO: TODO WAIT | DONE CANCELED\n\n* Existing\nSCHEDULED: <2026-07-01 Wed>\n"
+	os.WriteFile(filepath.Join(dir, "inbox.org"), []byte(inbox), 0644)
+	os.WriteFile(filepath.Join(dir, "work.org"), []byte(work), 0644)
+
+	date := time.Date(2026, 7, 9, 0, 0, 0, 0, time.Local)
+	// mixed targets in one call, ascending line order on purpose
+	refs := []MoveScheduleRef{
+		{File: "inbox.org", Line: 3, Target: "work.org"},
+		{File: "inbox.org", Line: 6, Target: "home.org"}, // home.org doesn't exist yet
+		{File: "inbox.org", Line: 9, Target: "inbox.org"},
+	}
+	if err := ScheduleMove(dir, refs, date); err != nil {
+		t.Fatal(err)
+	}
+
+	ib, _ := os.ReadFile(filepath.Join(dir, "inbox.org"))
+	if strings.Contains(string(ib), "First") || strings.Contains(string(ib), "Second") {
+		t.Errorf("moved entries must leave inbox:\n%s", ib)
+	}
+	if !strings.Contains(string(ib), "* TODO Third\nSCHEDULED: <2026-07-09 Thu>") {
+		t.Errorf("same-file target must schedule in place:\n%s", ib)
+	}
+
+	wk, _ := os.ReadFile(filepath.Join(dir, "work.org"))
+	if !strings.Contains(string(wk), "* Existing") ||
+		!strings.Contains(string(wk), "* TODO First :vk:\nSCHEDULED: <2026-07-09 Thu>\nbody first") {
+		t.Errorf("work.org must keep old content and gain scheduled entry with body:\n%s", wk)
+	}
+
+	hm, _ := os.ReadFile(filepath.Join(dir, "home.org"))
+	if !strings.Contains(string(hm), "* TODO Second :vk:\nSCHEDULED: <2026-07-09 Thu>\nbody second") {
+		t.Errorf("home.org must be created with the moved entry:\n%s", hm)
+	}
+
+	// everything still parses and is scheduled
+	entries, err := ParseDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byTitle := map[string]*Entry{}
+	for _, e := range entries {
+		byTitle[e.Title] = e
+	}
+	for title, wantFile := range map[string]string{"First": "work.org", "Second": "home.org", "Third": "inbox.org"} {
+		e := byTitle[title]
+		if e == nil || e.File != wantFile {
+			t.Errorf("%s: entry = %+v, want in %s", title, e, wantFile)
+		} else if e.Scheduled == nil || !e.Scheduled.Time.Equal(date) {
+			t.Errorf("%s: scheduled = %v", title, e.Scheduled)
+		}
+	}
+}
+
+func TestScheduleMoveValidatesTarget(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "inbox.org"), []byte("* TODO X\n"), 0644)
+	date := time.Date(2026, 7, 9, 0, 0, 0, 0, time.Local)
+	for _, bad := range []string{"../evil.org", "sub/dir.org", "notes.txt"} {
+		if err := ScheduleMove(dir, []MoveScheduleRef{{File: "inbox.org", Line: 1, Target: bad}}, date); err == nil {
+			t.Errorf("target %q must be rejected", bad)
+		}
+	}
+}
+
 func TestRescheduleAllStillReplacesExisting(t *testing.T) {
 	dir := t.TempDir()
 	content := "* TODO Dated\nSCHEDULED: <2026-06-01 Mon 10:30 +1w>\n"
