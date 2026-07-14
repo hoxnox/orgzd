@@ -111,6 +111,11 @@ func Start(addr, dir string) error {
 			if e.IsDone || e.Scheduled == nil {
 				continue
 			}
+			// recurring tasks keep their own rhythm — a mass move would
+			// shift the repeater's anchor date
+			if e.Scheduled.Repeater != "" {
+				continue
+			}
 			d := time.Date(e.Scheduled.Time.Year(), e.Scheduled.Time.Month(), e.Scheduled.Time.Day(), 0, 0, 0, 0, now.Location())
 			if !d.Before(today) {
 				continue
