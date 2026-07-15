@@ -179,6 +179,28 @@ func Start(addr, dir string) error {
 		w.WriteHeader(200)
 	})
 
+	http.HandleFunc("POST /api/checkbox", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			File    string `json:"file"`
+			Line    int    `json:"line"`
+			Index   int    `json:"index"`
+			Checked bool   `json:"checked"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		if strings.Contains(req.File, "/") || strings.Contains(req.File, "..") {
+			http.Error(w, "invalid file", 400)
+			return
+		}
+		if err := org.ToggleCheckbox(dir, req.File, req.Line, req.Index, req.Checked); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.WriteHeader(200)
+	})
+
 	type fileGroup struct {
 		Name    string
 		Entries []org.ArchiveCandidate

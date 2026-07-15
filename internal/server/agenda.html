@@ -99,6 +99,24 @@ nav a.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
   margin-top: 8px; white-space: pre-wrap; word-break: break-word;
   color: var(--text); font-family: inherit; font-size: 13px; line-height: 1.5;
 }
+pre.body .cbx { cursor: pointer; border-radius: 3px; }
+pre.body .cbx:hover { background: var(--border); }
+pre.body .cbx .box {
+  display: inline-block; width: 13px; height: 13px;
+  border: 1.5px solid var(--muted); border-radius: 3px;
+  vertical-align: -2px; margin-right: 7px; position: relative;
+}
+pre.body .cbx.on .box { background: var(--green); border-color: var(--green); }
+pre.body .cbx.on .box::after {
+  content: ""; position: absolute; left: 3.5px; top: 0.5px;
+  width: 4px; height: 8px; border: solid #111; border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+pre.body .cbx.part .box::after {
+  content: ""; position: absolute; left: 2px; top: 5px;
+  width: 7px; height: 2px; background: var(--muted);
+}
+pre.body .cbx.on { color: var(--muted); text-decoration: line-through; }
 </style>
 </head>
 <body>
@@ -138,7 +156,7 @@ nav a.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
       </summary>
       <div class="detail">
         <div class="dline"><span class="dk">@</span> {{.File}}:{{.Line}} <a href="/edit/{{.File}}/{{.Line}}" style="color:var(--accent);text-decoration:none;margin-left:8px">edit</a></div>
-        {{if .Body}}<pre class="body">{{.Body}}</pre>{{end}}
+        {{if .Body}}<pre class="body" data-file="{{.File}}" data-line="{{.Line}}">{{.Body}}</pre>{{end}}
       </div>
     </details>
     {{end}}
@@ -167,7 +185,7 @@ nav a.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
         {{with .Scheduled}}<div class="dline"><span class="dk">S</span> {{.}}</div>{{end}}
         {{with .Deadline}}<div class="dline"><span class="dk">D</span> {{.}}</div>{{end}}
         <div class="dline"><span class="dk">@</span> {{.File}}:{{.Line}} <a href="/edit/{{.File}}/{{.Line}}" style="color:var(--accent);text-decoration:none;margin-left:8px">edit</a></div>
-        {{if .Body}}<pre class="body">{{.Body}}</pre>{{end}}
+        {{if .Body}}<pre class="body" data-file="{{.File}}" data-line="{{.Line}}">{{.Body}}</pre>{{end}}
       </div>
     </details>
     {{end}}
@@ -228,6 +246,41 @@ document.querySelectorAll('.sched-all').forEach(function(btn){
     if (!entries.length) return;
     btn.disabled = true;
     scheduleEntries(entries, btn.dataset.when);
+  });
+});
+var cbxRe = /^(\s*)([-+]|\d+[.)])(\s+)\[([ xX-])\](.*)$/;
+document.querySelectorAll('pre.body').forEach(function(pre){
+  var lines = pre.textContent.split('\n');
+  if (!lines.some(function(l){ return cbxRe.test(l); })) return;
+  pre.textContent = '';
+  var idx = 0;
+  lines.forEach(function(l, li){
+    var m = l.match(cbxRe);
+    if (m) {
+      var s = document.createElement('span');
+      s.className = 'cbx' + (m[4].toLowerCase() === 'x' ? ' on' : (m[4] === '-' ? ' part' : ''));
+      s.dataset.i = idx++;
+      s.appendChild(document.createTextNode(m[1]));
+      var box = document.createElement('span');
+      box.className = 'box';
+      s.appendChild(box);
+      s.appendChild(document.createTextNode(m[5].replace(/^\s+/, '')));
+      s.addEventListener('click', function(){
+        var checked = !s.classList.contains('on');
+        fetch('/api/checkbox', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({file: pre.dataset.file, line: parseInt(pre.dataset.line), index: parseInt(s.dataset.i), checked: checked})
+        }).then(function(r){
+          if (r.ok) { s.classList.toggle('on', checked); s.classList.remove('part'); }
+          else r.text().then(function(t){ alert(t); });
+        });
+      });
+      pre.appendChild(s);
+    } else {
+      pre.appendChild(document.createTextNode(l));
+    }
+    if (li < lines.length - 1) pre.appendChild(document.createTextNode('\n'));
   });
 });
 document.querySelectorAll('.cb').forEach(function(btn){
