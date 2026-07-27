@@ -140,6 +140,44 @@ func TestMergeLastRepeatDiffIsAuto(t *testing.T) {
 	}
 }
 
+func TestMergeRepeaterAdvancedOnConflictSideWins(t *testing.T) {
+	// repeat was completed on the other device: its SCHEDULED is later
+	// and LAST_REPEAT newer — that side must win even though base is
+	// Syncthing's winner
+	base := testPreamble + "\n* Weekly sync :sgmt:\nSCHEDULED: <2026-07-27 Mon 19:55 +1w>\n:PROPERTIES:\n:LAST_REPEAT: [2026-07-20 Mon 21:04]\n:END:\n"
+	other := testPreamble + "\n* Weekly sync :sgmt:\nSCHEDULED: <2026-08-10 Mon 19:55 +1w>\n:PROPERTIES:\n:LAST_REPEAT: [2026-07-27 Mon 13:20]\n:END:\n"
+	dir := writeConflictPair(t, base, other)
+
+	text, pair, err := MergeConflict(dir, "work.org", "work.sync-conflict-20260701-235704-UQ77RGB.org", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pair.Items) != 0 {
+		t.Fatalf("expected clean merge, got items: %+v", pair.Items)
+	}
+	if !strings.Contains(text, "<2026-08-10 Mon 19:55 +1w>") || !strings.Contains(text, ":LAST_REPEAT: [2026-07-27 Mon 13:20]") {
+		t.Errorf("advanced repeat on conflict side must win:\n%s", text)
+	}
+}
+
+func TestMergeNonRepeaterStillBaseWins(t *testing.T) {
+	// plain reschedule diff: base wins even when the conflict date is later
+	base := testPreamble + "\n* Plain task\nSCHEDULED: <2026-07-27 Mon>\n"
+	other := testPreamble + "\n* Plain task\nSCHEDULED: <2026-08-10 Mon>\n"
+	dir := writeConflictPair(t, base, other)
+
+	text, pair, err := MergeConflict(dir, "work.org", "work.sync-conflict-20260701-235704-UQ77RGB.org", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pair.Items) != 0 {
+		t.Fatalf("expected clean merge, got items: %+v", pair.Items)
+	}
+	if !strings.Contains(text, "* Plain task\nSCHEDULED: <2026-07-27 Mon>") {
+		t.Errorf("base must win for non-repeaters:\n%s", text)
+	}
+}
+
 func TestAutoMergeConflictsWritesAndRemoves(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	base := testPreamble + "\n* DONE Task one\nCLOSED: [2026-07-01 Wed 23:35] SCHEDULED: <2026-07-01 Wed>\n"

@@ -185,13 +185,23 @@ func blockBodyKey(lines []string) string {
 
 // autoPick resolves a differing pair when only state/planning changed:
 // a completed version beats an uncompleted one (marking done must never
-// be undone by a merge), otherwise the base file wins — Syncthing keeps
-// the newer copy under the base name.
+// be undone by a merge); for repeaters the later SCHEDULED wins (a
+// completed repeat advances the date and must not be rolled back);
+// otherwise the base file wins — Syncthing keeps the newer copy under
+// the base name.
 func autoPick(base, other *mergeBlock) ([]string, bool) {
 	if blockBodyKey(base.raw) != blockBodyKey(other.raw) {
 		return nil, false
 	}
-	if other.isDone && !base.isDone {
+	if base.isDone != other.isDone {
+		if other.isDone {
+			return other.trimmed(), true
+		}
+		return base.trimmed(), true
+	}
+	_, bts := findScheduled(base.raw, 0)
+	_, ots := findScheduled(other.raw, 0)
+	if bts != nil && ots != nil && (bts.Repeater != "" || ots.Repeater != "") && ots.Time.After(bts.Time) {
 		return other.trimmed(), true
 	}
 	return base.trimmed(), true

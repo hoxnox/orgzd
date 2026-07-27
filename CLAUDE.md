@@ -39,7 +39,7 @@ Syncthing renames the losing copy of a concurrently-edited file to `name.sync-co
 
 - Merging is entry-level: files split into level-1 subtrees keyed by title+tags (state keyword stripped, duplicate titles get `#n` suffixes). Untouched blocks keep their exact source bytes — merge must not reformat the file.
 - **Union**: entries present in only one copy are kept, inserted after the nearest preceding shared entry.
-- **Auto-resolve** (when bodies match ignoring the planning line and `:LAST_REPEAT:`): a done version beats a not-done one (completion must never be lost), otherwise the base file wins (it's Syncthing's winner).
+- **Auto-resolve** (when bodies match ignoring the planning line and `:LAST_REPEAT:`): a done version beats a not-done one (completion must never be lost); for repeaters the later SCHEDULED wins (a completed repeat advances the date and must not be rolled back); otherwise the base file wins (it's Syncthing's winner).
 - **Manual**: entries whose body text differs are shown on `/conflicts` (linked from a banner on the agenda) where the user picks a version per entry, or discards the conflict file wholesale.
 - Before any write/delete both originals are backed up to `~/.cache/orgzd/conflict-backups/<timestamp>/`. The base file is written before the conflict copy is removed, so a mid-operation failure only means the merge re-runs.
 
