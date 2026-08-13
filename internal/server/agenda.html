@@ -69,6 +69,11 @@ details.inbox[open] > summary.glabel .arr { transform: rotate(90deg); }
   flex-shrink: 0; font-family: inherit;
 }
 .qs:hover { border-color: var(--accent); color: var(--accent); }
+.toinbox {
+  background: none; border: none; color: var(--yellow); cursor: pointer;
+  font-size: 12px; font-family: inherit; margin-left: 12px; padding: 0;
+}
+.toinbox:hover { text-decoration: underline; }
 .fs {
   background: none; border: 1px solid var(--border); color: var(--yellow);
   font-size: 10px; font-weight: 700; width: 22px; padding: 1px 0; border-radius: 3px;
@@ -184,7 +189,7 @@ pre.body .cbx.on { color: var(--muted); text-decoration: line-through; }
       <div class="detail">
         {{with .Scheduled}}<div class="dline"><span class="dk">S</span> {{.}}</div>{{end}}
         {{with .Deadline}}<div class="dline"><span class="dk">D</span> {{.}}</div>{{end}}
-        <div class="dline"><span class="dk">@</span> {{.File}}:{{.Line}} <a href="/edit/{{.File}}/{{.Line}}" style="color:var(--accent);text-decoration:none;margin-left:8px">edit</a></div>
+        <div class="dline"><span class="dk">@</span> {{.File}}:{{.Line}} <a href="/edit/{{.File}}/{{.Line}}" style="color:var(--accent);text-decoration:none;margin-left:8px">edit</a><button class="toinbox" data-file="{{.File}}" data-line="{{.Line}}">&#8617; inbox</button></div>
         {{if .Body}}<pre class="body" data-file="{{.File}}" data-line="{{.Line}}">{{.Body}}</pre>{{end}}
       </div>
     </details>
@@ -246,6 +251,19 @@ document.querySelectorAll('.sched-all').forEach(function(btn){
     if (!entries.length) return;
     btn.disabled = true;
     scheduleEntries(entries, btn.dataset.when);
+  });
+});
+document.querySelectorAll('.toinbox').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    btn.disabled = true;
+    fetch('/api/inbox', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({file: btn.dataset.file, line: parseInt(btn.dataset.line)})
+    }).then(function(r){
+      if (r.ok) location.reload();
+      else r.text().then(function(t){ alert(t); btn.disabled = false; });
+    });
   });
 });
 var cbxRe = /^(\s*)([-+]|\d+[.)])(\s+)\[([ xX-])\](.*)$/;

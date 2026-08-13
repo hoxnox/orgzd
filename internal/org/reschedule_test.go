@@ -130,6 +130,53 @@ func TestScheduleMoveValidatesTarget(t *testing.T) {
 	}
 }
 
+func TestMoveToInboxClearsScheduleAndMoves(t *testing.T) {
+	dir := t.TempDir()
+	work := "#+TODO: TODO WAIT | DONE CANCELED\n\n* TODO Task :vk:\nSCHEDULED: <2026-07-27 Mon> DEADLINE: <2026-08-01 Sat>\nbody line\n\n* Other\n"
+	inbox := "#+TODO: TODO WAIT | DONE CANCELED\n"
+	os.WriteFile(filepath.Join(dir, "work.org"), []byte(work), 0644)
+	os.WriteFile(filepath.Join(dir, "inbox.org"), []byte(inbox), 0644)
+
+	if err := MoveToInbox(dir, "work.org", 3); err != nil {
+		t.Fatal(err)
+	}
+	wk, _ := os.ReadFile(filepath.Join(dir, "work.org"))
+	if strings.Contains(string(wk), "Task") {
+		t.Errorf("entry must leave work.org:\n%s", wk)
+	}
+	if !strings.Contains(string(wk), "* Other") {
+		t.Errorf("other entries must stay:\n%s", wk)
+	}
+	ib, _ := os.ReadFile(filepath.Join(dir, "inbox.org"))
+	if !strings.Contains(string(ib), "* TODO Task :vk:\nDEADLINE: <2026-08-01 Sat>\nbody line") {
+		t.Errorf("inbox must get entry without SCHEDULED but with DEADLINE and body:\n%s", ib)
+	}
+	if strings.Contains(string(ib), "SCHEDULED") {
+		t.Errorf("SCHEDULED must be cleared:\n%s", ib)
+	}
+}
+
+func TestMoveToInboxInPlaceWhenAlreadyThere(t *testing.T) {
+	dir := t.TempDir()
+	inbox := "* TODO Dated inbox task\nSCHEDULED: <2026-07-27 Mon>\n\n* TODO Second\n"
+	os.WriteFile(filepath.Join(dir, "inbox.org"), []byte(inbox), 0644)
+
+	if err := MoveToInbox(dir, "inbox.org", 1); err != nil {
+		t.Fatal(err)
+	}
+	ib, _ := os.ReadFile(filepath.Join(dir, "inbox.org"))
+	got := string(ib)
+	if strings.Contains(got, "SCHEDULED") {
+		t.Errorf("SCHEDULED must be cleared in place:\n%s", got)
+	}
+	if strings.Count(got, "Dated inbox task") != 1 {
+		t.Errorf("entry must not duplicate:\n%s", got)
+	}
+	if !strings.Contains(got, "* TODO Second") {
+		t.Errorf("second entry must stay:\n%s", got)
+	}
+}
+
 func TestRescheduleAllStillReplacesExisting(t *testing.T) {
 	dir := t.TempDir()
 	content := "* TODO Dated\nSCHEDULED: <2026-06-01 Mon 10:30 +1w>\n"

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -250,6 +251,74 @@ func RescheduleAll(dir string, refs []ScheduleRef, newDate time.Time) error {
 		}
 	}
 	return nil
+}
+
+var scheduledPartRe = regexp.MustCompile(`\s*SCHEDULED:\s*<[^>]*>`)
+
+// MoveToInbox clears the entry's SCHEDULED date and moves its subtree
+// to inbox.org (entries already there just lose the date). Other
+// planning info (CLOSED/DEADLINE) is kept. inbox.org is appended
+// before the source is rewritten, so a mid-operation failure can only
+// duplicate the entry, never lose it.
+func MoveToInbox(dir, file string, line int) error {
+	if strings.Contains(file, "/") || strings.Contains(file, "..") {
+		return fmt.Errorf("invalid file: %s", file)
+	}
+	path := filepath.Join(dir, file)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	lines := strings.Split(string(data), "\n")
+	idx := line - 1
+	if idx < 0 || idx >= len(lines) {
+		return fmt.Errorf("line %d out of range", line)
+	}
+	m := headlineRe.FindStringSubmatch(lines[idx])
+	if m == nil {
+		return fmt.Errorf("line %d is not a headline", line)
+	}
+	level := len(m[1])
+	endIdx := len(lines)
+	for j := idx + 1; j < len(lines); j++ {
+		if m2 := headlineRe.FindStringSubmatch(lines[j]); m2 != nil && len(m2[1]) <= level {
+			endIdx = j
+			break
+		}
+	}
+	for endIdx > idx+1 && strings.TrimSpace(lines[endIdx-1]) == "" {
+		endIdx--
+	}
+
+	block := make([]string, endIdx-idx)
+	copy(block, lines[idx:endIdx])
+	if schedIdx, _ := findScheduled(block, 0); schedIdx > 0 {
+		nl := strings.TrimSpace(scheduledPartRe.ReplaceAllString(block[schedIdx], ""))
+		if nl == "" {
+			block = append(block[:schedIdx], block[schedIdx+1:]...)
+		} else {
+			block[schedIdx] = nl
+		}
+	}
+
+	if file == "inbox.org" {
+		rest := make([]string, len(lines[endIdx:]))
+		copy(rest, lines[endIdx:])
+		lines = append(append(lines[:idx], block...), rest...)
+		return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644)
+	}
+
+	f, err := os.OpenFile(filepath.Join(dir, "inbox.org"), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+	_, err = f.WriteString("\n" + strings.Join(block, "\n") + "\n")
+	f.Close()
+	if err != nil {
+		return err
+	}
+	lines = append(lines[:idx], lines[endIdx:]...)
+	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644)
 }
 
 func isPlanningLine(line string) bool {
