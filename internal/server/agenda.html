@@ -63,6 +63,7 @@ details.inbox > summary.glabel { cursor: pointer; list-style: none; }
 details.inbox > summary.glabel::-webkit-details-marker { display: none; }
 details.inbox > summary.glabel .arr { display: inline-block; transition: transform 0.15s; margin-right: 4px; }
 details.inbox[open] > summary.glabel .arr { transform: rotate(90deg); }
+details.inbox:not([open]) .sched-all { display: none; }
 .qs {
   background: none; border: 1px solid var(--border); color: var(--muted);
   font-size: 10px; padding: 1px 6px; border-radius: 3px; cursor: pointer;
@@ -249,6 +250,7 @@ document.querySelectorAll('.sched-all').forEach(function(btn){
       entries.push(rowRef(row));
     });
     if (!entries.length) return;
+    if (!confirm('Schedule all ' + entries.length + ' inbox entries to ' + btn.dataset.when + '?')) return;
     btn.disabled = true;
     scheduleEntries(entries, btn.dataset.when);
   });
