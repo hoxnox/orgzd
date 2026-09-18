@@ -41,6 +41,7 @@ button {
   padding: 8px 22px; font-size: 13px; font-weight: 600; cursor: pointer;
 }
 button:hover { opacity: 0.9; }
+button:disabled { opacity: 0.5; cursor: default; }
 button.cancel { background: var(--surface); color: var(--muted); }
 .hint { color: var(--dim); font-size: 11px; text-transform: none; font-weight: 400; letter-spacing: 0; }
 .err { color: var(--red); font-size: 12px; }
@@ -282,8 +283,10 @@ document.querySelectorAll('input[name="scheduled"], input[name="deadline"]').for
 });
 
 // ── form submit ───────────────────────────────────────────────────────
+var submitting = false;
 document.getElementById('ef').addEventListener('submit', function(e) {
   e.preventDefault();
+  if (submitting) return;
   var fd = new FormData(this);
   var data = {};
   fd.forEach(function(v, k) { data[k] = v; });
@@ -291,13 +294,26 @@ document.getElementById('ef').addEventListener('submit', function(e) {
   var url = mode === 'new' ? '/api/new' : '/api/edit';
   var err = document.getElementById('err');
   err.textContent = '';
+  var btn = this.querySelector('button[type="submit"]');
+  var label = btn.textContent;
+  submitting = true;
+  btn.disabled = true;
+  btn.textContent = mode === 'new' ? 'Creating...' : 'Saving...';
+  function unlock() {
+    submitting = false;
+    btn.disabled = false;
+    btn.textContent = label;
+  }
   fetch(url, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(data)
   }).then(function(r) {
-    if (r.ok) window.location = '/';
-    else r.text().then(function(t) { err.textContent = t.trim(); });
+    if (r.ok) { window.location = '/'; return; }
+    r.text().then(function(t) { err.textContent = t.trim(); unlock(); });
+  }).catch(function(ex) {
+    err.textContent = 'network error: ' + ex.message;
+    unlock();
   });
 });
 </script>
