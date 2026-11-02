@@ -226,6 +226,9 @@ func RescheduleAll(dir string, refs []ScheduleRef, newDate time.Time) error {
 		if strings.Contains(r.File, "/") || strings.Contains(r.File, "..") {
 			return fmt.Errorf("invalid file: %s", r.File)
 		}
+		if err := requireRoot(dir, r.File, r.Line); err != nil {
+			return err
+		}
 		byFile[r.File] = append(byFile[r.File], r.Line)
 	}
 	for file, lineNums := range byFile {
@@ -261,6 +264,9 @@ var scheduledPartRe = regexp.MustCompile(`\s*SCHEDULED:\s*<[^>]*>`)
 // before the source is rewritten, so a mid-operation failure can only
 // duplicate the entry, never lose it.
 func MoveToInbox(dir, file string, line int) error {
+	if err := requireRoot(dir, file, line); err != nil {
+		return err
+	}
 	if strings.Contains(file, "/") || strings.Contains(file, "..") {
 		return fmt.Errorf("invalid file: %s", file)
 	}
@@ -369,6 +375,9 @@ func ScheduleMove(dir string, refs []MoveScheduleRef, newDate time.Time) error {
 		if r.Target != "" && !strings.HasSuffix(r.Target, ".org") {
 			return fmt.Errorf("invalid target: %s", r.Target)
 		}
+		if err := requireRoot(dir, r.File, r.Line); err != nil {
+			return err
+		}
 		byFile[r.File] = append(byFile[r.File], r)
 	}
 
@@ -439,4 +448,24 @@ func ScheduleMove(dir string, refs []MoveScheduleRef, newDate time.Time) error {
 		}
 	}
 	return nil
+}
+
+// Validate every reference before a batch writes any files.
+func requireRoot(dir, file string, line int) error {
+	if strings.Contains(file, "/") || strings.Contains(file, "..") {
+		return fmt.Errorf("invalid file")
+	}
+	entries, err := ParseFile(filepath.Join(dir, file))
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if e.Line == line {
+			if e.Parent != nil {
+				return fmt.Errorf("schedule and inbox actions require a top-level task")
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("not a headline at line %d", line)
 }

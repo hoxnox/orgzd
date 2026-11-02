@@ -25,6 +25,10 @@ header .date { font-size: 13px; color: var(--muted); margin-top: 2px; }
 .glabel.overdue { color: var(--red); border-color: var(--red); }
 .glabel.today { color: var(--accent); border-color: var(--accent); }
 details.e { border-radius: 4px; }
+.children { margin-left: 18px; border-left: 1px solid var(--border); }
+.tree-arrow { display: inline-block; font-size: 11px; }
+details.e[open] > summary .tree-arrow { transform: rotate(90deg); }
+.st-DONE, .st-CANCELED { color: var(--muted); }
 details.e:hover { background: var(--surface); }
 details.e summary {
   display: flex; align-items: baseline; gap: 8px;
@@ -153,6 +157,7 @@ pre.body .cbx.on { color: var(--muted); text-decoration: line-through; }
       <summary>
         <button class="cb" data-file="{{.File}}" data-line="{{.Line}}">&nbsp;</button>
         {{if .State}}<span class="st st-{{.State}}">{{.State}}</span>{{end}}
+        {{if .Children}}<span class="tree-arrow">&#9656;</span>{{end}}
         <span class="title">{{.Title}}</span>
         {{range .Tags}}<a class="tag" href="/tag/{{.}}" onclick="event.stopPropagation()">{{.}}</a>{{end}}
         <button class="fs" data-target="work.org" title="target file: work.org">w</button>
@@ -164,6 +169,7 @@ pre.body .cbx.on { color: var(--muted); text-decoration: line-through; }
         <div class="dline"><span class="dk">@</span> {{.File}}:{{.Line}} <a href="/edit/{{.File}}/{{.Line}}" style="color:var(--accent);text-decoration:none;margin-left:8px">edit</a></div>
         {{if .Body}}<pre class="body" data-file="{{.File}}" data-line="{{.Line}}">{{.Body}}</pre>{{end}}
       </div>
+      {{template "children" .}}
     </details>
     {{end}}
   </details>
@@ -180,6 +186,7 @@ pre.body .cbx.on { color: var(--muted); text-decoration: line-through; }
       <summary>
         <button class="cb" data-file="{{.File}}" data-line="{{.Line}}">&nbsp;</button>
         {{if .State}}<span class="st st-{{.State}}">{{.State}}</span>{{end}}
+        {{if .Children}}<span class="tree-arrow">&#9656;</span>{{end}}
         <span class="title">{{.Title}}{{if .IsDeadline}}<span class="dl">DL</span>{{end}}</span>
         {{range .Tags}}<a class="tag" href="/tag/{{.}}" onclick="event.stopPropagation()">{{.}}</a>{{end}}
         {{if ne $type "today"}}<span class="meta">{{.DateLabel}}</span>{{end}}
@@ -193,6 +200,7 @@ pre.body .cbx.on { color: var(--muted); text-decoration: line-through; }
         <div class="dline"><span class="dk">@</span> {{.File}}:{{.Line}} <a href="/edit/{{.File}}/{{.Line}}" style="color:var(--accent);text-decoration:none;margin-left:8px">edit</a><button class="toinbox" data-file="{{.File}}" data-line="{{.Line}}">&#8617; inbox</button></div>
         {{if .Body}}<pre class="body" data-file="{{.File}}" data-line="{{.Line}}">{{.Body}}</pre>{{end}}
       </div>
+      {{template "children" .Entry}}
     </details>
     {{end}}
     {{else}}
@@ -246,7 +254,7 @@ document.querySelectorAll('.sched-all').forEach(function(btn){
     e.stopPropagation();
     e.preventDefault();
     var entries = [];
-    document.querySelectorAll('details.inbox details.e').forEach(function(row){
+    document.querySelectorAll('details.inbox > details.e').forEach(function(row){
       entries.push(rowRef(row));
     });
     if (!entries.length) return;
@@ -327,3 +335,25 @@ document.querySelectorAll('.cb').forEach(function(btn){
 </script>
 </body>
 </html>
+
+{{define "children"}}
+{{if .Children}}<div class="children">
+{{range .Children}}
+<details class="e child">
+  <summary>
+    {{if not .IsDone}}<button class="cb" data-file="{{.File}}" data-line="{{.Line}}" aria-label="Mark done">&nbsp;</button>{{end}}
+    {{if .State}}<span class="st st-{{.State}}">{{.State}}</span>{{end}}
+    {{if .Children}}<span class="tree-arrow">&#9656;</span>{{end}}
+    <span class="title">{{.Title}}</span>
+    {{range .Tags}}<a class="tag" href="/tag/{{.}}" onclick="event.stopPropagation()">{{.}}</a>{{end}}
+    {{if .Body}}<span class="has-body">&middot;&middot;&middot;</span>{{end}}
+  </summary>
+  <div class="detail">
+    <div class="dline"><span class="dk">@</span> {{.File}}:{{.Line}} <a href="/edit/{{.File}}/{{.Line}}" style="color:var(--accent);margin-left:8px">edit</a></div>
+    {{if .Body}}<pre class="body" data-file="{{.File}}" data-line="{{.Line}}">{{.Body}}</pre>{{end}}
+  </div>
+  {{template "children" .}}
+</details>
+{{end}}
+</div>{{end}}
+{{end}}

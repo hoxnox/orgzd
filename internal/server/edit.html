@@ -104,6 +104,12 @@ button.cancel { background: var(--surface); color: var(--muted); }
     <label>Tags <span class="hint">space-separated</span>
       <input name="tags" value="{{.TagsStr}}" placeholder="vk school">
     </label>
+    {{if .Draft.ParentLine}}
+    <div class="hint">Dates are set on the <a href="/edit/{{.Draft.File}}/{{.Draft.ParentLine}}">top-level task</a>.
+      {{with .Draft.ParentScheduled}}Scheduled: {{.}}{{end}}
+      {{with .Draft.ParentDeadline}}Deadline: {{.}}{{end}}
+    </div>
+    {{else}}
     <div class="row">
       <label>Scheduled <span class="hint">YYYY-MM-DD [HH:MM] [+1w]</span>
         <input name="scheduled" value="{{.Draft.Scheduled}}" placeholder="2026-06-15 14:00 +1w">
@@ -112,6 +118,7 @@ button.cancel { background: var(--surface); color: var(--muted); }
         <input name="deadline" value="{{.Draft.Deadline}}" placeholder="">
       </label>
     </div>
+    {{end}}
     <label>Body
       <textarea name="body">{{.Draft.Body}}</textarea>
     </label>

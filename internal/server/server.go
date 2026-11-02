@@ -77,7 +77,7 @@ func Start(addr, dir string) error {
 		groups := agenda.Build(entries, time.Now())
 		var inbox []*org.Entry
 		for _, e := range entries {
-			if e.File == "inbox.org" && !e.IsDone && e.Scheduled == nil && e.Deadline == nil {
+			if e.Parent == nil && e.File == "inbox.org" && !e.IsDone && e.Scheduled == nil && e.Deadline == nil {
 				inbox = append(inbox, e)
 			}
 		}
@@ -108,7 +108,7 @@ func Start(addr, dir string) error {
 		today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 		var refs []org.ScheduleRef
 		for _, e := range entries {
-			if e.IsDone || e.Scheduled == nil {
+			if e.Parent != nil || e.IsDone || e.Scheduled == nil {
 				continue
 			}
 			// recurring tasks keep their own rhythm — a mass move would

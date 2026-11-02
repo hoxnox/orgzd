@@ -10,14 +10,17 @@ import (
 )
 
 type EntryDraft struct {
-	File      string   `json:"file"`
-	Line      int      `json:"line"`
-	State     string   `json:"state"`
-	Title     string   `json:"title"`
-	Tags      []string `json:"tags"`
-	Scheduled string   `json:"scheduled"`
-	Deadline  string   `json:"deadline"`
-	Body      string   `json:"body"`
+	ParentLine      int      `json:"-"`
+	ParentScheduled string   `json:"-"`
+	ParentDeadline  string   `json:"-"`
+	File            string   `json:"file"`
+	Line            int      `json:"line"`
+	State           string   `json:"state"`
+	Title           string   `json:"title"`
+	Tags            []string `json:"tags"`
+	Scheduled       string   `json:"scheduled"`
+	Deadline        string   `json:"deadline"`
+	Body            string   `json:"body"`
 }
 
 func ListFiles(dir string) ([]string, error) {
@@ -135,7 +138,18 @@ func LoadEntry(dir, file string, line int) (*EntryDraft, error) {
 		body = strings.Join(lines[bodyStart:bodyEnd], "\n")
 	}
 
-	return &EntryDraft{
+	var root *Entry
+	entries, err := ParseFile(filepath.Join(dir, file))
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range entries {
+		if e.Line == line && e.Parent != nil {
+			root = e.Root()
+			break
+		}
+	}
+	draft := &EntryDraft{
 		File:      file,
 		Line:      line,
 		State:     state,
@@ -144,7 +158,17 @@ func LoadEntry(dir, file string, line int) (*EntryDraft, error) {
 		Scheduled: scheduledStr,
 		Deadline:  deadlineStr,
 		Body:      body,
-	}, nil
+	}
+	if root != nil {
+		draft.ParentLine = root.Line
+		if root.Scheduled != nil {
+			draft.ParentScheduled = timestampToInput(root.Scheduled)
+		}
+		if root.Deadline != nil {
+			draft.ParentDeadline = timestampToInput(root.Deadline)
+		}
+	}
+	return draft, nil
 }
 
 func CreateEntry(dir string, d *EntryDraft) error {
@@ -176,6 +200,14 @@ func CreateEntry(dir string, d *EntryDraft) error {
 func UpdateEntry(dir string, d *EntryDraft) error {
 	if err := validateDraft(d, true); err != nil {
 		return err
+	}
+	original, err := LoadEntry(dir, d.File, d.Line)
+	if err != nil {
+		return err
+	}
+	if original.ParentLine != 0 {
+		// Child planning remains intact in the source; only the root controls agenda dates.
+		d.Scheduled, d.Deadline = original.Scheduled, original.Deadline
 	}
 	path := filepath.Join(dir, d.File)
 	data, err := os.ReadFile(path)

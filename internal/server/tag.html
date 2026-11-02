@@ -97,9 +97,9 @@ details.e summary::-webkit-details-marker { display: none; }
       {{if .Body}}<span class="has-body">&middot;&middot;&middot;</span>{{end}}
     </summary>
     <div class="detail">
-      {{with .Closed}}<div class="dline"><span class="dk">C</span> {{.}}</div>{{end}}
-      {{with .Scheduled}}<div class="dline"><span class="dk">S</span> {{.}}</div>{{end}}
-      {{with .Deadline}}<div class="dline"><span class="dk">D</span> {{.}}</div>{{end}}
+      {{with .Root.Closed}}<div class="dline"><span class="dk">C</span> {{.}}</div>{{end}}
+      {{with .Root.Scheduled}}<div class="dline"><span class="dk">S</span> {{.}}</div>{{end}}
+      {{with .Root.Deadline}}<div class="dline"><span class="dk">D</span> {{.}}</div>{{end}}
       <div class="dline"><span class="dk">@</span> {{.File}}:{{.Line}} <a href="/edit/{{.File}}/{{.Line}}" style="color:var(--accent);text-decoration:none;margin-left:8px">edit</a></div>
       {{if .Body}}<pre class="body">{{.Body}}</pre>{{end}}
     </div>

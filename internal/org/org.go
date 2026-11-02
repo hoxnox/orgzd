@@ -17,6 +17,8 @@ type Timestamp struct {
 }
 
 type Entry struct {
+	Parent    *Entry
+	Children  []*Entry
 	Level     int
 	State     string
 	IsDone    bool
@@ -30,7 +32,17 @@ type Entry struct {
 	Line      int
 }
 
+func (e *Entry) Root() *Entry {
+	for e.Parent != nil {
+		e = e.Parent
+	}
+	return e
+}
+
 func (e *Entry) RelevantDate() *Timestamp {
+	if e.Parent != nil {
+		return e.Root().RelevantDate()
+	}
 	if e.Closed != nil {
 		return e.Closed
 	}
@@ -99,6 +111,7 @@ func ParseFile(path string) ([]*Entry, error) {
 	scanner := bufio.NewScanner(f)
 	var entries []*Entry
 	var current *Entry
+	var stack []*Entry
 	var bodyLines []string
 	inPlanning := false
 	inDrawer := false
@@ -159,6 +172,14 @@ func ParseFile(path string) ([]*Entry, error) {
 				File:   fname,
 				Line:   lineNum,
 			}
+			for len(stack) > 0 && stack[len(stack)-1].Level >= level {
+				stack = stack[:len(stack)-1]
+			}
+			if len(stack) > 0 {
+				current.Parent = stack[len(stack)-1]
+				current.Parent.Children = append(current.Parent.Children, current)
+			}
+			stack = append(stack, current)
 			inPlanning = true
 			inDrawer = false
 			entries = append(entries, current)

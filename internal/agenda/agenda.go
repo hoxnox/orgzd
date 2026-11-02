@@ -45,7 +45,7 @@ func Build(entries []*org.Entry, now time.Time) []Group {
 	}
 
 	for _, e := range entries {
-		if e.IsDone {
+		if e.Parent != nil || e.IsDone {
 			continue
 		}
 		var ts *org.Timestamp
